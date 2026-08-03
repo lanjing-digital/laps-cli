@@ -169,8 +169,11 @@ h1 { margin: 0; font-size: 20px; line-height: 1.3; color: #0f172a; }
 .gantt-row { min-height: 34px; background: #fff; }
 .order-label { position: sticky; left: 0; z-index: 1; display: flex; align-items: center; padding: 6px 14px; overflow: hidden; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #eef2f7; background: #fff; color: #334155; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .track { position: relative; min-height: 34px; border-bottom: 1px solid #eef2f7; background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(12.5% - 1px), #eef2f7 calc(12.5% - 1px), #eef2f7 12.5%); }
-.bar { position: absolute; top: 7px; height: 20px; min-width: 5px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgb(15 23 42 / 12%); }
+.bar { position: absolute; top: 7px; height: 20px; min-width: 5px; border-radius: 4px; cursor: help; box-shadow: inset 0 0 0 1px rgb(15 23 42 / 12%); }
 .bar.late { outline: 2px solid #dc2626; outline-offset: 1px; }
+.bar:focus-visible { outline: 3px solid #0f172a; outline-offset: 2px; }
+.schedule-tooltip { position: fixed; z-index: 20; max-width: 340px; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: rgb(15 23 42 / 96%); color: #f8fafc; font-size: 12px; line-height: 1.55; white-space: pre-line; pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity 120ms ease-out, transform 120ms ease-out; }
+.schedule-tooltip.visible { opacity: 1; transform: translateY(0); }
 .legend { display: flex; flex-wrap: wrap; gap: 12px 18px; margin-top: 14px; color: #475569; font-size: 12px; }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .legend-swatch { width: 12px; height: 12px; border-radius: 3px; background: #2563eb; }
@@ -207,13 +210,65 @@ h1 { margin: 0; font-size: 20px; line-height: 1.3; color: #0f172a; }
 			if block.CanMeetDeadline != nil && !*block.CanMeetDeadline {
 				className += " late"
 			}
-			details := fmt.Sprintf("%s · %s 至 %s · 数量 %s · 效率 %s%s", block.OrderLabel, formatDate(block.StartDate), formatDate(block.EndDate), formatNumber(block.AllocatedQty), formatPercent(block.Efficiency), deadlineSuffix(block.CanMeetDeadline))
-			fmt.Fprintf(&b, `<div class="gantt-row"><div class="order-label" title="%s">%s</div><div class="track"><div class="%s" title="%s" aria-label="%s" style="left: %.4f%%; width: %.4f%%; background: %s"></div></div></div>`, html.EscapeString(details), html.EscapeString(shorten(block.OrderLabel, 34)), className, html.EscapeString(details), html.EscapeString(details), left, width, colors[groupIndex%len(colors)])
+			details := tooltipDetails(group.name, block)
+			fmt.Fprintf(&b, `<div class="gantt-row"><div class="order-label" title="%s">%s</div><div class="track"><div class="%s" data-tooltip="%s" aria-label="%s" aria-describedby="schedule-tooltip" role="img" tabindex="0" style="left: %.4f%%; width: %.4f%%; background: %s"></div></div></div>`, html.EscapeString(details), html.EscapeString(shorten(block.OrderLabel, 34)), className, html.EscapeString(details), html.EscapeString(details), left, width, colors[groupIndex%len(colors)])
 		}
 		b.WriteString(`</section>`)
 	}
-	b.WriteString(`</div></div><div class="legend"><span class="legend-item"><i class="legend-swatch"></i>排产区块（悬停查看订单、日期、数量与效率）</span><span class="legend-item"><i class="legend-swatch late"></i>可能逾期</span></div></main></body></html>`)
+	b.WriteString(`</div></div><div class="legend"><span class="legend-item"><i class="legend-swatch"></i>排产区块（悬停或聚焦查看详细信息）</span><span class="legend-item"><i class="legend-swatch late"></i>可能逾期</span></div></main><div id="schedule-tooltip" class="schedule-tooltip" role="tooltip" aria-hidden="true"></div><script>
+(() => {
+  const tooltip = document.getElementById("schedule-tooltip");
+  let activeBar = null;
+  const place = (bar, event) => {
+    const rect = bar.getBoundingClientRect();
+    const pointX = event && Number.isFinite(event.clientX) ? event.clientX : rect.left + rect.width / 2;
+    const pointY = event && Number.isFinite(event.clientY) ? event.clientY : rect.bottom;
+    tooltip.style.left = "0px";
+    tooltip.style.top = "0px";
+    const bounds = tooltip.getBoundingClientRect();
+    const left = Math.max(8, Math.min(pointX + 14, window.innerWidth - bounds.width - 8));
+    const top = Math.max(8, Math.min(pointY + 14, window.innerHeight - bounds.height - 8));
+    tooltip.style.left = left + "px";
+    tooltip.style.top = top + "px";
+  };
+  const show = (bar, event) => {
+    activeBar = bar;
+    tooltip.textContent = bar.dataset.tooltip || bar.getAttribute("aria-label") || "";
+    tooltip.setAttribute("aria-hidden", "false");
+    tooltip.classList.add("visible");
+    place(bar, event);
+  };
+  const hide = (bar) => {
+    if (bar && activeBar !== bar) return;
+    activeBar = null;
+    tooltip.classList.remove("visible");
+    tooltip.setAttribute("aria-hidden", "true");
+  };
+  document.querySelectorAll(".bar[data-tooltip]").forEach((bar) => {
+    bar.addEventListener("pointerenter", (event) => show(bar, event));
+    bar.addEventListener("pointermove", (event) => show(bar, event));
+    bar.addEventListener("pointerleave", () => hide(bar));
+    bar.addEventListener("focus", () => show(bar));
+    bar.addEventListener("blur", () => hide(bar));
+    bar.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(bar); });
+  });
+  window.addEventListener("scroll", () => activeBar && place(activeBar), true);
+  window.addEventListener("resize", () => activeBar && place(activeBar));
+})();
+</script></body></html>`)
 	return b.String() + "\n"
+}
+
+func tooltipDetails(teamName string, block Block) string {
+	deadline := "交期状态：待确认"
+	if block.CanMeetDeadline != nil {
+		if *block.CanMeetDeadline {
+			deadline = "交期状态：可按期完成"
+		} else {
+			deadline = "交期状态：可能逾期"
+		}
+	}
+	return fmt.Sprintf("班组：%s\n订单：%s\n计划：%s 至 %s\n分配数量：%s\n效率：%s\n%s", teamName, block.OrderLabel, formatDate(block.StartDate), formatDate(block.EndDate), formatNumber(block.AllocatedQty), formatPercent(block.Efficiency), deadline)
 }
 
 func dateTicks(totalDays int) []int {

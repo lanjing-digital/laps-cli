@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestHTMLRendersScrollableGanttWithoutBarLabels(t *testing.T) {
+func TestHTMLRendersScrollableGanttWithInteractiveDetailTooltip(t *testing.T) {
 	canMeetDeadline := false
 	payload := map[string]any{
 		"plan": map[string]any{
@@ -31,6 +31,11 @@ func TestHTMLRendersScrollableGanttWithoutBarLabels(t *testing.T) {
 		"gantt-scroll",
 		"M260727010046/客户&lt;甲&gt;&amp;",
 		"class=\"bar late\"",
+		`id="schedule-tooltip"`,
+		`data-tooltip="班组：A组`,
+		"pointerenter",
+		"tabindex=\"0\"",
+		"交期状态：可能逾期",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("HTML() missing %q: %s", want, got)
@@ -41,6 +46,9 @@ func TestHTMLRendersScrollableGanttWithoutBarLabels(t *testing.T) {
 	}
 	if strings.Contains(got, "bar-label") {
 		t.Fatalf("HTML() must not write labels inside schedule bars: %s", got)
+	}
+	if strings.Contains(got, `class="bar late" title=`) {
+		t.Fatalf("HTML() must use the in-page tooltip instead of a browser title: %s", got)
 	}
 }
 
