@@ -1,6 +1,6 @@
 {
   "name": "@lanjing-digital/laps-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Cross-platform launcher and skill installer for LAPS CLI",
   "type": "module",
   "bin": {
@@ -10,6 +10,7 @@
     "npm/bin",
     "npm/lib",
     "npm/test",
+    "docs",
     "skills",
     "README.md",
     "package.json"

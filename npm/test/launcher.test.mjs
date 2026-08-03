@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { allSkills, parseInstallArgs, resolveTarget } from "../lib/launcher.js";
+import { allSkills, normalizeServerURL, parseInstallArgs, parseUpdateArgs, resolveTarget } from "../lib/launcher.js";
 
 test("maps supported Node targets to Go release assets", () => {
   assert.deepEqual(resolveTarget("darwin", "arm64"), { goos: "darwin", goarch: "arm64", executable: "laps-cli", asset: "laps-cli_darwin_arm64" });
@@ -12,12 +12,21 @@ test("rejects unsupported platform combinations", () => {
   assert.throws(() => resolveTarget("linux", "ia32"), /unsupported platform/);
 });
 
-test("install options keep falsey controls and validate skills", () => {
-  assert.deepEqual(parseInstallArgs(["laps-orders", "--bin-dir", "/tmp/bin", "--skills-dir", "/tmp/skills"]), {
-    binDir: "/tmp/bin", skillsDir: "/tmp/skills", noSkills: false, skills: ["laps-orders"],
+test("install options preserve paths, source, and server configuration", () => {
+  assert.deepEqual(parseInstallArgs(["laps-orders", "--bin-dir", "/tmp/bin", "--install-dir", "/tmp/laps", "--skills-dir", "/tmp/skills", "--server", "https://aps.example.com"]), {
+    binDir: "/tmp/bin", installDir: "/tmp/laps", skillsDir: "/tmp/skills", server: "https://aps.example.com", source: "github", noSkills: false, skills: ["laps-orders"],
   });
   assert.deepEqual(parseInstallArgs(["--no-skills"]), {
-    binDir: undefined, skillsDir: undefined, noSkills: true, skills: allSkills,
+    binDir: undefined, installDir: undefined, skillsDir: undefined, server: undefined, source: "github", noSkills: true, skills: allSkills,
   });
   assert.throws(() => parseInstallArgs(["unknown-skill"]), /unknown skill/);
+});
+
+test("normalizes configured APS server URLs and validates update sources", () => {
+  assert.equal(normalizeServerURL("https://aps.example.com/"), "https://aps.example.com");
+  assert.equal(normalizeServerURL("http://192.168.1.20:3000"), "http://192.168.1.20:3000");
+  assert.throws(() => normalizeServerURL("aps.example.com"), /http:\/\//);
+  assert.deepEqual(parseUpdateArgs([]), { source: "auto" });
+  assert.deepEqual(parseUpdateArgs(["--source", "github"]), { source: "github" });
+  assert.throws(() => parseUpdateArgs(["--source", "invalid"]), /auto, npm, or github/);
 });

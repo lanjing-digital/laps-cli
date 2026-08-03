@@ -14,25 +14,25 @@ The package includes seven focused agent skills:
 
 ## Install with npx
 
-Install the native CLI for the current platform and all skills:
+Install the native CLI for the current platform and all skills from the public GitHub repository. Provide the remote APS server address during installation:
 
 ```sh
-npx @lanjing-digital/laps-cli@latest install
+npx --yes github:lanjing-digital/laps-cli install --server https://aps.example.com
 ```
 
-The command installs the executable to `~/.local/bin` on macOS/Linux and to the per-user local application directory on Windows. It installs skills to `~/.agents/skills` by default. Neither location is added to `PATH` automatically.
+Use an IP address when appropriate, for example `http://192.168.1.20:3000`. The command installs a self-updating launcher to `~/.local/bin` on macOS/Linux and to the per-user local application directory on Windows. It installs skills to `~/.agents/skills` by default. Neither location is added to `PATH` automatically.
 
 Choose locations explicitly when needed:
 
 ```sh
-npx @lanjing-digital/laps-cli@latest install --bin-dir "$HOME/.local/bin" --skills-dir "$HOME/.codex/skills"
+npx --yes github:lanjing-digital/laps-cli install --server https://aps.example.com --bin-dir "$HOME/.local/bin" --skills-dir "$HOME/.codex/skills"
 ```
 
 Install only selected skills, or only the CLI:
 
 ```sh
-npx @lanjing-digital/laps-cli@latest install laps-orders laps-capacity
-npx @lanjing-digital/laps-cli@latest install --no-skills
+npx --yes github:lanjing-digital/laps-cli install laps-orders laps-capacity --server https://aps.example.com
+npx --yes github:lanjing-digital/laps-cli install --no-skills --server https://aps.example.com
 ```
 
 The launcher supports macOS, Linux and Windows on x64 and arm64. It downloads the matching Go binary from the public GitHub Release and verifies its SHA-256 checksum before running it.
@@ -40,11 +40,28 @@ The launcher supports macOS, Linux and Windows on x64 and arm64. It downloads th
 ## Run without a persistent installation
 
 ```sh
-npx @lanjing-digital/laps-cli@latest auth status
-npx @lanjing-digital/laps-cli@latest orders list
+npx --yes github:lanjing-digital/laps-cli auth status --base-url https://aps.example.com
+npx --yes github:lanjing-digital/laps-cli orders list --base-url https://aps.example.com
 ```
 
-Set `SCHEDULING_API_BASE_URL` to the LAPS service URL, then authenticate with `laps-cli auth login`. Use `laps-cli --help` and each command's `--help` for the current interface.
+The first persistent use requires a remote APS server. Configure it once, then authenticate:
+
+```sh
+laps-cli config set-server --url https://aps.example.com
+laps-cli auth login
+```
+
+`--base-url` is a one-command override, and `SCHEDULING_API_BASE_URL` takes priority over the saved setting. Use `laps-cli --help` and each command's `--help` for the current interface. Agent-specific installation guidance is in [docs/AGENT_INSTALL.md](docs/AGENT_INSTALL.md).
+
+## Update
+
+```sh
+laps-cli update --source github
+laps-cli update --source npm
+laps-cli update
+```
+
+`github` updates from this public repository. `npm` uses the public `@lanjing-digital/laps-cli` package once it is published. The default `auto` mode tries npm first and then falls back to GitHub.
 
 ## Release process
 
