@@ -1,4 +1,4 @@
 interface:
   display_name: "Production Scheduling"
-  short_description: "Preview, lock, batch-apply, move, and inspect production schedules"
-  default_prompt: "Use $production-scheduling to preview this scheduling change and apply or lock it only after confirmation."
+  short_description: "Preview today's plan and safely apply scheduling changes"
+  default_prompt: "Use $production-scheduling to preview pending orders for today, attach the CLI-generated HTML Gantt chart, and apply only after I confirm."

@@ -77,29 +77,29 @@ func SVG(payload map[string]any) string {
 		rowCount += len(group.blocks) + 1
 	}
 
-	left := 180
-	top := 56
-	dayWidth := 18
+	left := 240
+	top := 86
+	dayWidth := 16
 	if totalDays > 60 {
 		dayWidth = 12
 	}
 	if totalDays > 100 {
 		dayWidth = 8
 	}
-	width := left + totalDays*dayWidth + 48
+	width := max(960, left+totalDays*dayWidth+48)
 	height := top + rowCount*34 + 48
 
 	var b strings.Builder
 	fmt.Fprintf(&b, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`+"\n", width, height, width, height)
 	fmt.Fprintf(&b, `<rect width="100%%" height="100%%" fill="#f8fafc"/>`+"\n")
 	fmt.Fprintf(&b, `<text x="24" y="30" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#0f172a">Schedule Gantt</text>`+"\n")
-	fmt.Fprintf(&b, `<text x="%d" y="30" font-family="Arial, sans-serif" font-size="12" fill="#475569">%s -> %s</text>`+"\n", left, formatDate(minDate), formatDate(maxDate))
+	fmt.Fprintf(&b, `<text x="24" y="52" font-family="Arial, sans-serif" font-size="12" fill="#475569">%s -> %s · %d blocks</text>`+"\n", formatDate(minDate), formatDate(maxDate), len(blocks))
 
 	for day := 0; day < totalDays; day += max(1, int(math.Ceil(float64(totalDays)/12.0))) {
 		x := left + day*dayWidth
 		date := minDate.AddDate(0, 0, day)
-		fmt.Fprintf(&b, `<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#cbd5e1" stroke-width="1"/>`+"\n", x, top-18, x, height-24)
-		fmt.Fprintf(&b, `<text x="%d" y="%d" font-family="Arial, sans-serif" font-size="10" fill="#64748b">%s</text>`+"\n", x+2, top-24, html.EscapeString(date.Format("01-02")))
+		fmt.Fprintf(&b, `<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#cbd5e1" stroke-width="1"/>`+"\n", x, top-10, x, height-24)
+		fmt.Fprintf(&b, `<text x="%d" y="%d" font-family="Arial, sans-serif" font-size="10" fill="#64748b">%s</text>`+"\n", x+2, top-20, html.EscapeString(date.Format("01-02")))
 	}
 
 	y := top
@@ -117,12 +117,115 @@ func SVG(payload map[string]any) string {
 			fmt.Fprintf(&b, `<text x="42" y="%d" font-family="Arial, sans-serif" font-size="11" fill="#334155">%s</text>`+"\n", y+16, html.EscapeString(shorten(block.OrderLabel, 20)))
 			fmt.Fprintf(&b, `<rect x="%d" y="%d" width="%d" height="22" rx="4" fill="%s" opacity="0.88"/>`+"\n", x, y, w, color)
 			fmt.Fprintf(&b, `<title>%s</title>`+"\n", html.EscapeString(label))
-			fmt.Fprintf(&b, `<text x="%d" y="%d" font-family="Arial, sans-serif" font-size="10" fill="#ffffff">%s</text>`+"\n", x+6, y+15, html.EscapeString(shorten(label, max(8, w/6))))
 			y += 34
 		}
 	}
 	fmt.Fprintf(&b, "</svg>\n")
 	return b.String()
+}
+
+// HTML returns a self-contained, scrollable Gantt view that is safe to embed in
+// a sandboxed iframe. Labels deliberately stay outside schedule bars so short
+// allocations never produce overlapping text.
+func HTML(payload map[string]any) string {
+	blocks := ExtractBlocks(payload)
+	if len(blocks) == 0 {
+		return `<!doctype html><html lang="en"><meta charset="utf-8"><body><p>No schedule blocks with start/end dates found in response.</p></body></html>` + "\n"
+	}
+
+	minDate, maxDate := dateRange(blocks)
+	totalDays := max(1, daysBetween(minDate, maxDate)+1)
+	groups := groupBlocks(blocks)
+	teamCount := len(groups)
+	timelineWidth := max(860, totalDays*22)
+	tickDays := dateTicks(totalDays)
+
+	var b strings.Builder
+	b.WriteString(`<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>排产甘特图</title>
+<style>
+:root { color: #1e293b; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #f8fafc; }
+.page { min-width: 760px; padding: 20px; }
+h1 { margin: 0; font-size: 20px; line-height: 1.3; color: #0f172a; }
+.meta { margin: 6px 0 18px; color: #64748b; font-size: 13px; }
+.gantt-scroll { overflow: auto; border: 1px solid #dbe3ef; border-radius: 10px; background: #fff; }
+.gantt { min-width: var(--timeline-total-width); }
+.axis, .gantt-row { display: grid; grid-template-columns: 220px var(--timeline-width); }
+.axis { position: sticky; top: 0; z-index: 3; background: #f8fafc; border-bottom: 1px solid #dbe3ef; }
+.axis-label { padding: 10px 14px; color: #64748b; font-size: 12px; font-weight: 600; }
+.axis-track { position: relative; height: 40px; overflow: visible; }
+.tick { position: absolute; top: 0; bottom: 0; border-left: 1px solid #dbe3ef; }
+.tick-label { position: absolute; top: 11px; transform: translateX(-50%); color: #64748b; font-size: 11px; white-space: nowrap; }
+.tick-label.first { transform: none; }
+.tick-label.last { transform: translateX(-100%); }
+.team-heading { position: sticky; left: 0; z-index: 2; display: grid; grid-template-columns: 220px var(--timeline-width); background: #f1f5f9; border-top: 1px solid #dbe3ef; border-bottom: 1px solid #dbe3ef; }
+.team-heading span { padding: 8px 14px; color: #334155; font-size: 13px; font-weight: 700; }
+.gantt-row { min-height: 34px; background: #fff; }
+.order-label { position: sticky; left: 0; z-index: 1; display: flex; align-items: center; padding: 6px 14px; overflow: hidden; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #eef2f7; background: #fff; color: #334155; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.track { position: relative; min-height: 34px; border-bottom: 1px solid #eef2f7; background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(12.5% - 1px), #eef2f7 calc(12.5% - 1px), #eef2f7 12.5%); }
+.bar { position: absolute; top: 7px; height: 20px; min-width: 5px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgb(15 23 42 / 12%); }
+.bar.late { outline: 2px solid #dc2626; outline-offset: 1px; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px 18px; margin-top: 14px; color: #475569; font-size: 12px; }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.legend-swatch { width: 12px; height: 12px; border-radius: 3px; background: #2563eb; }
+.legend-swatch.late { background: #fff; border: 2px solid #dc2626; }
+</style>
+</head>
+<body>
+`)
+	fmt.Fprintf(&b, `<main class="page" style="--timeline-width: %dpx; --timeline-total-width: %dpx">`, timelineWidth, timelineWidth+220)
+	fmt.Fprintf(&b, `<h1>排产甘特图</h1><p class="meta">%s 至 %s · %d 个排产区块 · %d 个班组</p>`, html.EscapeString(formatDate(minDate)), html.EscapeString(formatDate(maxDate)), len(blocks), teamCount)
+	b.WriteString(`<div class="gantt-scroll"><div class="gantt"><div class="axis"><div class="axis-label">订单 / 款号</div><div class="axis-track">`)
+	for index, day := range tickDays {
+		left := float64(day) / float64(totalDays) * 100
+		className := "tick-label"
+		if index == 0 {
+			className += " first"
+		} else if index == len(tickDays)-1 {
+			className += " last"
+		}
+		date := minDate.AddDate(0, 0, day).Format("01-02")
+		fmt.Fprintf(&b, `<span class="tick" style="left: %.4f%%"></span><span class="%s" style="left: %.4f%%">%s</span>`, left, className, left, html.EscapeString(date))
+	}
+	b.WriteString(`</div></div>`)
+
+	colors := []string{"#2563eb", "#059669", "#d97706", "#7c3aed", "#0891b2", "#db2777"}
+	for groupIndex, group := range groups {
+		fmt.Fprintf(&b, `<section><div class="team-heading"><span>%s</span><span></span></div>`, html.EscapeString(group.name))
+		for _, block := range group.blocks {
+			start := daysBetween(minDate, block.StartDate)
+			duration := max(1, daysBetween(block.StartDate, block.EndDate)+1)
+			left := float64(start) / float64(totalDays) * 100
+			width := float64(duration) / float64(totalDays) * 100
+			className := "bar"
+			if block.CanMeetDeadline != nil && !*block.CanMeetDeadline {
+				className += " late"
+			}
+			details := fmt.Sprintf("%s · %s 至 %s · 数量 %s · 效率 %s%s", block.OrderLabel, formatDate(block.StartDate), formatDate(block.EndDate), formatNumber(block.AllocatedQty), formatPercent(block.Efficiency), deadlineSuffix(block.CanMeetDeadline))
+			fmt.Fprintf(&b, `<div class="gantt-row"><div class="order-label" title="%s">%s</div><div class="track"><div class="%s" title="%s" aria-label="%s" style="left: %.4f%%; width: %.4f%%; background: %s"></div></div></div>`, html.EscapeString(details), html.EscapeString(shorten(block.OrderLabel, 34)), className, html.EscapeString(details), html.EscapeString(details), left, width, colors[groupIndex%len(colors)])
+		}
+		b.WriteString(`</section>`)
+	}
+	b.WriteString(`</div></div><div class="legend"><span class="legend-item"><i class="legend-swatch"></i>排产区块（悬停查看订单、日期、数量与效率）</span><span class="legend-item"><i class="legend-swatch late"></i>可能逾期</span></div></main></body></html>`)
+	return b.String() + "\n"
+}
+
+func dateTicks(totalDays int) []int {
+	step := max(1, int(math.Ceil(float64(totalDays)/8.0)))
+	ticks := make([]int, 0, 10)
+	for day := 0; day < totalDays; day += step {
+		ticks = append(ticks, day)
+	}
+	if ticks[len(ticks)-1] != totalDays-1 {
+		ticks = append(ticks, totalDays-1)
+	}
+	return ticks
 }
 
 func ExtractBlocks(payload map[string]any) []Block {

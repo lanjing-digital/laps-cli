@@ -18,6 +18,13 @@ type recordingTokenProvider struct {
 	forces []bool
 }
 
+func TestDefaultBaseURLUsesProductionHTTPS(t *testing.T) {
+	const want = "https://lanjingshuzi.cn:3000"
+	if DefaultBaseURL != want {
+		t.Fatalf("DefaultBaseURL = %q, want %q", DefaultBaseURL, want)
+	}
+}
+
 func (p *recordingTokenProvider) AccessToken(_ context.Context, force bool) (string, error) {
 	p.forces = append(p.forces, force)
 	index := len(p.forces) - 1

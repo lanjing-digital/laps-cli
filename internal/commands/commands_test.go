@@ -41,6 +41,9 @@ func TestPreviewUsesEnvAndPersistFalse(t *testing.T) {
 	if gotBody["persist"] != false {
 		t.Fatalf("expected persist false, got %#v", gotBody["persist"])
 	}
+	if gotBody["planningReferenceDate"] != defaultPlanningReferenceDate(time.Now()) {
+		t.Fatalf("expected default planning reference date today, got %#v", gotBody["planningReferenceDate"])
+	}
 	orderIDs, ok := gotBody["orderIds"].([]any)
 	if !ok || len(orderIDs) != 1 || orderIDs[0] != "order_1" {
 		t.Fatalf("unexpected orderIds: %#v", gotBody["orderIds"])
@@ -60,6 +63,9 @@ func TestPreviewUsesEnvAndPersistFalse(t *testing.T) {
 	}
 	if output["success"] != true || output["command"] != commandPreview || output["persist"] != false {
 		t.Fatalf("unexpected output: %#v", output)
+	}
+	if output["planningReferenceDate"] != defaultPlanningReferenceDate(time.Now()) {
+		t.Fatalf("output must expose the resolved reference date: %#v", output)
 	}
 }
 
@@ -83,6 +89,7 @@ func TestApplyFlagOverridesEnvAndPersistTrue(t *testing.T) {
 		"auto-schedule", "apply",
 		"--base-url", server.URL,
 		"--token", "flag-token",
+		"--plan-id", "plan_1",
 		"--order-id", "order_1",
 		"--order-id", "order_2",
 	}, &stdout, &bytes.Buffer{})
@@ -94,6 +101,12 @@ func TestApplyFlagOverridesEnvAndPersistTrue(t *testing.T) {
 	}
 	if gotBody["persist"] != true {
 		t.Fatalf("expected persist true, got %#v", gotBody["persist"])
+	}
+	if gotBody["capacityPlanId"] != "plan_1" {
+		t.Fatalf("expected explicit capacity plan, got %#v", gotBody["capacityPlanId"])
+	}
+	if _, exists := gotBody["planningReferenceDate"]; exists {
+		t.Fatalf("explicit plan must not add the default reference date: %#v", gotBody)
 	}
 	orderIDs := gotBody["orderIds"].([]any)
 	if len(orderIDs) != 2 {
@@ -124,6 +137,14 @@ func TestAutoScheduleRejectsUnknownCapacityMode(t *testing.T) {
 	var stdout bytes.Buffer
 	code := Run([]string{"auto-schedule", "preview", "--capacity-mode", "unknown"}, &stdout, &bytes.Buffer{})
 	if code != ExitUsage || !strings.Contains(stdout.String(), "invalid --capacity-mode") {
+		t.Fatalf("unexpected result: code=%d output=%s", code, stdout.String())
+	}
+}
+
+func TestAutoScheduleRejectsInvalidReferenceDate(t *testing.T) {
+	var stdout bytes.Buffer
+	code := Run([]string{"auto-schedule", "preview", "--ref-date", "2026/08/03"}, &stdout, &bytes.Buffer{})
+	if code != ExitUsage || !strings.Contains(stdout.String(), "invalid --ref-date") {
 		t.Fatalf("unexpected result: code=%d output=%s", code, stdout.String())
 	}
 }
@@ -178,6 +199,9 @@ func TestActionHelpReturnsTextAndZero(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "laps-cli auto-schedule preview") {
 		t.Fatalf("unexpected help output: %s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "--plan-id") || !strings.Contains(stdout.String(), "--ref-date") || !strings.Contains(stdout.String(), "defaults to today") {
+		t.Fatalf("help must expose capacity plan and default-today reference date: %s", stdout.String())
 	}
 	if strings.Contains(stdout.String(), `"success"`) {
 		t.Fatalf("help should be text, got JSON: %s", stdout.String())

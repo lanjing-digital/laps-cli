@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const DefaultBaseURL = "http://127.0.0.1:3000"
+const DefaultBaseURL = "https://lanjingshuzi.cn:3000"
 
 type Client struct {
 	BaseURL       string
@@ -31,10 +31,12 @@ type TokenProvider interface {
 }
 
 type AutoScheduleRequest struct {
-	OrderIDs          []string                  `json:"orderIds,omitempty"`
-	Persist           bool                      `json:"persist"`
-	RunOverrides      *AutoScheduleRunOverrides `json:"runOverrides,omitempty"`
-	MaterialReadiness *MaterialReadinessControl `json:"materialReadiness,omitempty"`
+	OrderIDs              []string                  `json:"orderIds,omitempty"`
+	Persist               bool                      `json:"persist"`
+	CapacityPlanId        string                    `json:"capacityPlanId,omitempty"`
+	PlanningReferenceDate string                    `json:"planningReferenceDate,omitempty"`
+	RunOverrides          *AutoScheduleRunOverrides `json:"runOverrides,omitempty"`
+	MaterialReadiness     *MaterialReadinessControl `json:"materialReadiness,omitempty"`
 }
 
 type MaterialReadinessControl struct {

@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	cliAuth "production-scheduling-cli/internal/auth"
 	"production-scheduling-cli/internal/client"
@@ -400,8 +401,19 @@ func runAutoScheduleAction(args []string, persist bool, command string, stdout i
 	readinessMode := fs.String("readiness-mode", "inherit", "inherit | ignore | warn | block")
 	readinessSource := fs.String("readiness-source", "inherit", "inherit | auto | builtin | external")
 	readinessMaxAge := fs.Int("readiness-max-age-minutes", 0, "maximum readiness result age")
+	planID := fs.String("plan-id", "", "capacity plan ID (required by server for auto-schedule)")
+	refDate := fs.String("ref-date", "", "planning reference date YYYY-MM-DD; defaults to today when --plan-id is omitted")
 	if code := parseNoArgs(fs, args, stdout, command); code != ExitOK {
 		return code
+	}
+	resolvedRefDate := strings.TrimSpace(*refDate)
+	if strings.TrimSpace(*planID) == "" && resolvedRefDate == "" {
+		resolvedRefDate = defaultPlanningReferenceDate(time.Now())
+	}
+	if resolvedRefDate != "" {
+		if _, err := time.Parse("2006-01-02", resolvedRefDate); err != nil {
+			return writeConfigError(stdout, "invalid --ref-date: expected YYYY-MM-DD")
+		}
 	}
 	if !oneOf(*capacityMode, "inherit", "sam_efficiency", "guaranteed_daily_output", "category_daily_output") {
 		return writeConfigError(stdout, "invalid --capacity-mode: "+*capacityMode)
@@ -427,8 +439,10 @@ func runAutoScheduleAction(args []string, persist bool, command string, stdout i
 		return ExitUsage
 	}
 	request := client.AutoScheduleRequest{
-		OrderIDs: orderIDs,
-		Persist:  persist,
+		OrderIDs:              orderIDs,
+		Persist:               persist,
+		CapacityPlanId:        strings.TrimSpace(*planID),
+		PlanningReferenceDate: resolvedRefDate,
 	}
 	if *capacityMode != "inherit" || len(resourceIDs) > 0 || *preferSameProductResource != "inherit" || *replanUnstartedOrders != "inherit" {
 		request.RunOverrides = &client.AutoScheduleRunOverrides{
@@ -465,11 +479,22 @@ func runAutoScheduleAction(args []string, persist bool, command string, stdout i
 		return writeAPIError(stdout, err, command, &persist, orderIDs)
 	}
 
-	return emitVisualResponse(stdout, apiClient, response, map[string]any{
+	metadata := map[string]any{
 		"command":  command,
 		"persist":  persist,
 		"orderIds": []string(orderIDs),
-	}, view)
+	}
+	if capacityPlanID := strings.TrimSpace(*planID); capacityPlanID != "" {
+		metadata["capacityPlanId"] = capacityPlanID
+	}
+	if resolvedRefDate != "" {
+		metadata["planningReferenceDate"] = resolvedRefDate
+	}
+	return emitVisualResponse(stdout, apiClient, response, metadata, view)
+}
+
+func defaultPlanningReferenceDate(now time.Time) string {
+	return now.Format("2006-01-02")
 }
 
 func runTeams(args []string, stdout io.Writer, stderr io.Writer) int {
@@ -754,8 +779,8 @@ func addCommonFlags(fs *flag.FlagSet) commonFlags {
 
 func addRenderFlags(fs *flag.FlagSet) renderFlags {
 	return renderFlags{
-		format: fs.String("format", "json", "output format: json | timeline | svg"),
-		output: fs.String("output", "", "write rendered timeline/svg output to a file"),
+		format: fs.String("format", "json", "output format: json | timeline | svg | html"),
+		output: fs.String("output", "", "write rendered timeline/svg/html output to a file"),
 	}
 }
 
@@ -895,8 +920,8 @@ func writeAuthLogoutUsage(w io.Writer) {
 
 func writeAutoScheduleUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  laps-cli auto-schedule preview [--base-url URL] [--order-id ID ...] [--capacity-mode MODE] [--resource-id ID ...]")
-	fmt.Fprintln(w, "  laps-cli auto-schedule apply   [--base-url URL] [--order-id ID ...] [--capacity-mode MODE] [--resource-id ID ...]")
+	fmt.Fprintln(w, "  laps-cli auto-schedule preview [--base-url URL] [--order-id ID ...] [--plan-id ID | --ref-date YYYY-MM-DD] [--capacity-mode MODE] [--resource-id ID ...]")
+	fmt.Fprintln(w, "  laps-cli auto-schedule apply   [--base-url URL] [--order-id ID ...] [--plan-id ID | --ref-date YYYY-MM-DD] [--capacity-mode MODE] [--resource-id ID ...]")
 	writeEnvironment(w)
 }
 
@@ -914,9 +939,11 @@ func writeCapacityUsage(w io.Writer) {
 
 func writeAutoScheduleActionUsage(w io.Writer, command string) {
 	fmt.Fprintf(w, "Usage:\n")
-	fmt.Fprintf(w, "  laps-cli %s [--base-url URL] [--order-id ID ...] [--capacity-mode MODE] [--resource-id ID ...] [--format json|timeline|svg] [--output FILE]\n", command)
+	fmt.Fprintf(w, "  laps-cli %s [--base-url URL] [--order-id ID ...] [--plan-id ID | --ref-date YYYY-MM-DD] [--capacity-mode MODE] [--resource-id ID ...] [--format json|timeline|svg|html] [--output FILE]\n", command)
 	writeCommonFlags(w)
 	writeRenderFlags(w)
+	fmt.Fprintln(w, "  --plan-id ID                Use this published capacity plan")
+	fmt.Fprintln(w, "  --ref-date YYYY-MM-DD       Resolve the published plan for this date; defaults to today when --plan-id is omitted")
 	fmt.Fprintln(w, "  --capacity-mode VALUE       inherit | sam_efficiency | guaranteed_daily_output | category_daily_output")
 	fmt.Fprintln(w, "  --resource-id ID            Repeat to constrain candidates for this run")
 	fmt.Fprintln(w, "  --prefer-same-product-resource VALUE  inherit | true | false")
@@ -925,7 +952,7 @@ func writeAutoScheduleActionUsage(w io.Writer, command string) {
 	fmt.Fprintln(w, "  --readiness-mode VALUE      inherit | ignore | warn | block")
 	fmt.Fprintln(w, "  --readiness-source VALUE    inherit | auto | builtin | external")
 	fmt.Fprintln(w, "Output:")
-	fmt.Fprintln(w, "  Default JSON is stable for AI agents. Timeline and SVG show a Gantt-like view with each order start/end date.")
+	fmt.Fprintln(w, "  Default JSON is stable for AI agents. HTML is the preferred readable Gantt view; SVG is a portable fallback.")
 }
 
 func writeTeamsUsage(w io.Writer) {
@@ -955,7 +982,7 @@ func writeOrdersListUsage(w io.Writer) {
 
 func writeSchedulesUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  laps-cli schedules list [--base-url URL] [--team-id ID] [--order-id ID] [--limit N] [--page-token TOKEN] [--format json|timeline|svg] [--output FILE]")
+	fmt.Fprintln(w, "  laps-cli schedules list [--base-url URL] [--team-id ID] [--order-id ID] [--limit N] [--page-token TOKEN] [--format json|timeline|svg|html] [--output FILE]")
 }
 
 func writeSchedulesListUsage(w io.Writer) {
@@ -985,9 +1012,9 @@ func writeMoveSourceUsage(w io.Writer, sourceType string) {
 func writeMoveActionUsage(w io.Writer, sourceType string, action string) {
 	fmt.Fprintln(w, "Usage:")
 	if sourceType == "order" {
-		fmt.Fprintf(w, "  laps-cli move order %s --order-id ID --to-team-id ID [--base-url URL] [--format json|timeline|svg] [--output FILE]\n", action)
+		fmt.Fprintf(w, "  laps-cli move order %s --order-id ID --to-team-id ID [--base-url URL] [--format json|timeline|svg|html] [--output FILE]\n", action)
 	} else {
-		fmt.Fprintf(w, "  laps-cli move schedule %s --schedule-id ID --to-team-id ID [--base-url URL] [--format json|timeline|svg] [--output FILE]\n", action)
+		fmt.Fprintf(w, "  laps-cli move schedule %s --schedule-id ID --to-team-id ID [--base-url URL] [--format json|timeline|svg|html] [--output FILE]\n", action)
 	}
 	writeCommonFlags(w)
 	fmt.Fprintln(w, "  --order-id ID      order ID (move order only)")
@@ -999,21 +1026,21 @@ func writeMoveActionUsage(w io.Writer, sourceType string, action string) {
 func writeCommonFlags(w io.Writer) {
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Flags:")
-	fmt.Fprintln(w, "  --base-url URL     scheduling API base URL; default http://127.0.0.1:3000 or SCHEDULING_API_BASE_URL")
+	fmt.Fprintf(w, "  --base-url URL     scheduling API base URL; default %s or SCHEDULING_API_BASE_URL\n", client.DefaultBaseURL)
 	fmt.Fprintln(w, "  --token TOKEN      explicit OAuth access token override; normally use `laps-cli auth login`")
 	fmt.Fprintln(w, "  -h, --help         help for this command")
 	fmt.Fprintln(w, "")
 }
 
 func writeRenderFlags(w io.Writer) {
-	fmt.Fprintln(w, "  --format VALUE     json | timeline | svg (default json)")
-	fmt.Fprintln(w, "  --output FILE      write timeline/svg output to a file")
+	fmt.Fprintln(w, "  --format VALUE     json | timeline | svg | html (default json)")
+	fmt.Fprintln(w, "  --output FILE      write timeline/svg/html output to a file")
 }
 
 func writeEnvironment(w io.Writer) {
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Environment:")
-	fmt.Fprintln(w, "  SCHEDULING_API_BASE_URL  default http://127.0.0.1:3000")
+	fmt.Fprintf(w, "  SCHEDULING_API_BASE_URL  default %s\n", client.DefaultBaseURL)
 	fmt.Fprintln(w, "  SCHEDULING_API_TOKEN     optional OAuth access token override (no automatic refresh)")
 }
 
@@ -1106,6 +1133,8 @@ func emitResponse(w io.Writer, response map[string]any, metadata map[string]any,
 		return writeRenderedOutput(w, render.Timeline(payload), *view.output)
 	case "svg":
 		return writeRenderedOutput(w, render.SVG(payload), *view.output)
+	case "html":
+		return writeRenderedOutput(w, render.HTML(payload), *view.output)
 	default:
 		return writeConfigError(w, "unsupported --format: "+*view.format)
 	}
