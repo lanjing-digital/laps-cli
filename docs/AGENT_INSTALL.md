@@ -2,6 +2,10 @@
 
 Use this document when an agent needs to install or initialize LAPS CLI for a user. The CLI invokes the user's permitted `/api/laps/*` operations; it does not contain scheduling rules.
 
+## Prerequisite
+
+The user needs Node.js 18 or newer because installation runs through `npx`. They do **not** need Go, a Go compiler, or any Go environment configuration. The installer downloads the matching checksum-verified native binary from the public GitHub Release.
+
 ## Required information
 
 Before installation, obtain the APS server address from the user or their administrator. It must be a complete HTTP(S) URL, including the scheme and optional port.

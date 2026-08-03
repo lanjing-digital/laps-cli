@@ -35,7 +35,7 @@ npx --yes github:lanjing-digital/laps-cli install laps-orders laps-capacity --se
 npx --yes github:lanjing-digital/laps-cli install --no-skills --server https://aps.example.com
 ```
 
-The launcher supports macOS, Linux and Windows on x64 and arm64. It downloads the matching Go binary from the public GitHub Release and verifies its SHA-256 checksum before running it.
+The launcher supports macOS, Linux and Windows on x64 and arm64. It downloads the matching precompiled binary from the public GitHub Release and verifies its SHA-256 checksum before running it. Users need Node.js 18 or newer for `npx`, but **do not need Go, a Go compiler, or a Go environment variable**.
 
 ## Run without a persistent installation
 
