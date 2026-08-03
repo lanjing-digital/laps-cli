@@ -1,11 +1,66 @@
 package auth
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
+
+func TestResolveDefaultCredentialsPath(t *testing.T) {
+	configDirErr := errors.New("user config directory unavailable")
+	tests := []struct {
+		name           string
+		configOverride string
+		configDir      string
+		configDirErr   error
+		tempDir        string
+		want           string
+	}{
+		{
+			name:           "explicit configuration directory takes precedence",
+			configOverride: "/srv/laps-cli",
+			configDir:      "/home/tester/.config",
+			tempDir:        "/tmp",
+			want:           filepath.Join("/srv/laps-cli", credentialsFileName),
+		},
+		{
+			name:      "uses operating system config directory",
+			configDir: "/home/tester/.config",
+			tempDir:   "/tmp",
+			want:      filepath.Join("/home/tester/.config", fallbackConfigDirName, credentialsFileName),
+		},
+		{
+			name:         "falls back when headless environment has no user config directory",
+			configDirErr: configDirErr,
+			tempDir:      "/tmp",
+			want:         filepath.Join("/tmp", fallbackConfigDirName, credentialsFileName),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path, err := resolveDefaultCredentialsPath(
+				func(name string) string {
+					if name == configDirEnv {
+						return tt.configOverride
+					}
+					return ""
+				},
+				func() (string, error) { return tt.configDir, tt.configDirErr },
+				func() string { return tt.tempDir },
+			)
+			if err != nil {
+				t.Fatalf("resolve path: %v", err)
+			}
+			if path != tt.want {
+				t.Fatalf("path = %q, want %q", path, tt.want)
+			}
+		})
+	}
+}
 
 func TestFileStoreUsesPrivatePermissions(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "credentials.json")
@@ -24,8 +79,10 @@ func TestFileStoreUsesPrivatePermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat credentials: %v", err)
 	}
-	if got := info.Mode().Perm(); got != 0o600 {
-		t.Fatalf("credentials permissions = %o, want 600", got)
+	if runtime.GOOS != "windows" {
+		if got := info.Mode().Perm(); got != 0o600 {
+			t.Fatalf("credentials permissions = %o, want 600", got)
+		}
 	}
 	got, err := store.Load()
 	if err != nil {

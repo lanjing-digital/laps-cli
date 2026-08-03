@@ -12,6 +12,11 @@ import (
 
 const configDirEnv = "LAPS_CLI_CONFIG_DIR"
 
+const (
+	credentialsFileName   = "credentials.json"
+	fallbackConfigDirName = "laps-cli"
+)
+
 var ErrNotLoggedIn = errors.New("not logged in")
 
 type User struct {
@@ -42,14 +47,34 @@ type FileStore struct {
 }
 
 func DefaultCredentialsPath() (string, error) {
-	if customDir := strings.TrimSpace(os.Getenv(configDirEnv)); customDir != "" {
-		return filepath.Join(customDir, "credentials.json"), nil
+	return resolveDefaultCredentialsPath(os.Getenv, os.UserConfigDir, os.TempDir)
+}
+
+// resolveDefaultCredentialsPath keeps credential storage available in minimal
+// environments such as containers, where HOME and XDG_CONFIG_HOME may both be
+// intentionally unset. LAPS_CLI_CONFIG_DIR remains the preferred explicit
+// override, followed by the operating system's normal user config directory.
+func resolveDefaultCredentialsPath(
+	getenv func(string) string,
+	userConfigDir func() (string, error),
+	tempDir func() string,
+) (string, error) {
+	if customDir := strings.TrimSpace(getenv(configDirEnv)); customDir != "" {
+		return filepath.Join(customDir, credentialsFileName), nil
 	}
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve user config directory: %w", err)
+
+	if configDir, err := userConfigDir(); err == nil && strings.TrimSpace(configDir) != "" {
+		return filepath.Join(configDir, fallbackConfigDirName, credentialsFileName), nil
 	}
-	return filepath.Join(configDir, "laps-cli", "credentials.json"), nil
+
+	// os.TempDir supplies a platform-native temporary location on macOS, Linux,
+	// and Windows. This is a last resort only; users who need durable storage in
+	// a headless environment can set LAPS_CLI_CONFIG_DIR explicitly.
+	if dir := strings.TrimSpace(tempDir()); dir != "" {
+		return filepath.Join(dir, fallbackConfigDirName, credentialsFileName), nil
+	}
+
+	return "", fmt.Errorf("resolve credentials directory: user config directory and temporary directory are unavailable")
 }
 
 func DefaultStore() (Store, error) {
