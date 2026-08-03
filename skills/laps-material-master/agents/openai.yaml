@@ -1,0 +1,4 @@
+interface:
+  display_name: "LAPS Material Master"
+  short_description: "Manage materials, BOMs, inventory imports, and import history"
+  default_prompt: "Use $laps-material-master to manage materials, BOMs, or inventory through laps-cli."

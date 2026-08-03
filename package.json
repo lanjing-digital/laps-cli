@@ -1,0 +1,35 @@
+{
+  "name": "@lanjing-digital/laps-cli",
+  "version": "0.1.0",
+  "description": "Cross-platform launcher and skill installer for LAPS CLI",
+  "type": "module",
+  "bin": {
+    "laps-cli": "npm/bin/laps-cli.js"
+  },
+  "files": [
+    "npm/bin",
+    "npm/lib",
+    "npm/test",
+    "skills",
+    "README.md",
+    "package.json"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lanjing-digital/laps-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lanjing-digital/laps-cli/issues"
+  },
+  "homepage": "https://github.com/lanjing-digital/laps-cli#readme",
+  "scripts": {
+    "test": "node --test npm/test/*.test.mjs",
+    "pack:check": "npm pack --dry-run"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

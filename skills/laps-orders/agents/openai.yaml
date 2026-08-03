@@ -1,0 +1,4 @@
+interface:
+  display_name: "LAPS Orders"
+  short_description: "Query, edit, export, and safely import production orders"
+  default_prompt: "Use $laps-orders to complete this production-order task through laps-cli."

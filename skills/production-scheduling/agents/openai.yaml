@@ -1,0 +1,4 @@
+interface:
+  display_name: "Production Scheduling"
+  short_description: "Preview, lock, batch-apply, move, and inspect production schedules"
+  default_prompt: "Use $production-scheduling to preview this scheduling change and apply or lock it only after confirmation."

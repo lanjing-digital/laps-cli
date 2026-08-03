@@ -1,0 +1,4 @@
+interface:
+  display_name: "LAPS Master Data"
+  short_description: "Maintain factories, batch settings, teams, and scheduling calendars"
+  default_prompt: "Use $laps-master-data to complete this scheduling master-data task safely through laps-cli."
