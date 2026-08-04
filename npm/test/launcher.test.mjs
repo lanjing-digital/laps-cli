@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { allSkills, normalizeServerURL, parseInstallArgs, parseUpdateArgs, resolveTarget, writeLauncher } from "../lib/launcher.js";
+import { allSkills, normalizeServerURL, parseInstallArgs, parseUpdateArgs, resolveTarget, updateInstallArguments, writeLauncher } from "../lib/launcher.js";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -32,6 +32,17 @@ test("normalizes configured APS server URLs and validates update sources", () =>
   assert.deepEqual(parseUpdateArgs([]), { source: "auto" });
   assert.deepEqual(parseUpdateArgs(["--source", "github"]), { source: "github" });
   assert.throws(() => parseUpdateArgs(["--source", "invalid"]), /auto, npm, or github/);
+});
+
+test("GitHub updates bypass stale npx cache while preserving installation locations", () => {
+  assert.deepEqual(updateInstallArguments("github", {
+    installDir: "/tmp/laps-cli",
+    binDir: "/tmp/bin",
+    skillsDir: "/tmp/skills",
+  }), [
+    "--yes", "--force", "github:lanjing-digital/laps-cli", "install",
+    "--install-dir", "/tmp/laps-cli", "--bin-dir", "/tmp/bin", "--skills-dir", "/tmp/skills", "--source", "github",
+  ]);
 });
 
 test("writes persistent CLI and MCP launchers without requiring Go", async () => {

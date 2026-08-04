@@ -353,6 +353,10 @@ function updateSpec(source) {
   return source === "npm" ? "@lanjing-digital/laps-cli@latest" : `github:${releaseRepository}`;
 }
 
+export function updateInstallArguments(source, settings) {
+  return ["--yes", "--force", updateSpec(source), "install", "--install-dir", settings.installDir, "--bin-dir", settings.binDir, "--skills-dir", settings.skillsDir, "--source", source];
+}
+
 async function runUpdate(argumentsList) {
   if (argumentsList.includes("--help") || argumentsList.includes("-h")) {
     process.stdout.write("Usage: laps-cli update [--source auto|github|npm]\n");
@@ -363,7 +367,7 @@ async function runUpdate(argumentsList) {
   const sources = source === "auto" ? ["npm", "github"] : [source];
   for (const candidate of sources) {
     if (source === "auto") process.stdout.write(`checking ${candidate} update source...\n`);
-    const result = spawnSync(npxCommand(), ["--yes", updateSpec(candidate), "install", "--install-dir", settings.installDir, "--bin-dir", settings.binDir, "--skills-dir", settings.skillsDir, "--source", candidate], {
+    const result = spawnSync(npxCommand(), updateInstallArguments(candidate, settings), {
       stdio: source === "auto" && candidate === "npm" ? "pipe" : "inherit",
     });
     if (!result.error && result.status === 0) {
