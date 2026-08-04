@@ -209,10 +209,16 @@ async function installSkill(skill, targetRoot, sourceRoot) {
 }
 
 function distributionFilter(source) {
-  // The installed MCP entrypoint imports the package's production dependencies.
-  // `npx` has already installed these beside the launcher, so preserve them when
-  // atomically copying the self-updating package to its persistent location.
-  return ![".git", "vendor", "dist"].includes(path.basename(source));
+  return ![".git", "node_modules", "vendor", "dist"].includes(path.basename(source));
+}
+
+function npmCommand(target = resolveTarget()) {
+  return target.goos === "windows" ? "npm.cmd" : "npm";
+}
+
+function installRuntimeDependencies(directory) {
+  const result = spawnSync(npmCommand(), ["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: directory, stdio: "inherit" });
+  if (result.error || result.status !== 0) throw new Error("could not prepare the WorkBuddy connector dependencies; verify Node.js and network access");
 }
 
 async function installPackage(installDir) {
@@ -228,9 +234,10 @@ async function installPackage(installDir) {
       stat(path.join(staging, "npm", "bin", "laps-cli.js")),
       stat(path.join(staging, "npm", "bin", "laps-mcp.js")),
       stat(path.join(staging, "npm", "lib", "launcher.js")),
-      stat(path.join(staging, "node_modules", "@modelcontextprotocol", "sdk", "package.json")),
       stat(path.join(staging, "skills", "laps-cli-auth", "SKILL.md")),
     ]);
+    installRuntimeDependencies(staging);
+    await stat(path.join(staging, "node_modules", "@modelcontextprotocol", "sdk", "package.json"));
     try { await stat(installDir); await rename(installDir, backup); } catch (error) { if (error.code !== "ENOENT") throw error; }
     await rename(staging, installDir);
   } finally {
