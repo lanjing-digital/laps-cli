@@ -72,6 +72,8 @@ laps-mcp workbuddy config --install --yes
 
 Open WorkBuddy's custom connector settings afterwards and Trust the LAPS connector. The connector reports business outcomes and hides technical diagnostics by default.
 
+For schedule queries and trial schedules, the connector uses the local LAPS installation to create an HTML Gantt chart and includes it as an attachment in the WorkBuddy conversation. Leave the display format and local output location unspecified to use this default.
+
 ## Update
 
 ```sh

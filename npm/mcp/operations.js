@@ -1,4 +1,5 @@
 import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 
@@ -42,14 +43,14 @@ export const domainOperations = {
   scheduling: {
     "teams-list": operation(["teams", "list"]),
     ...Object.fromEntries(Object.entries(crud("schedules")).map(([name, spec]) => [`schedules-${name}`, spec])),
-    "schedules-list": operation(["schedules", "list"], { options: ["team-id", "order-id", "limit", "page-token", "format"], output: true }),
+    "schedules-list": operation(["schedules", "list"], { options: ["team-id", "order-id", "limit", "page-token", "format"], output: true, htmlPreview: true }),
     "schedules-lock": operation(["schedules", "lock"], { mutates: true, fields: { id: "id" }, required: ["id"], options: ["locked"] }),
     "schedules-apply": operation(["schedules", "apply"], { mutates: true, file: true }),
-    "auto-preview": operation(["auto-schedule", "preview"], { fields: { orderIds: "order-id", resourceIds: "resource-id" }, options: ["plan-id", "ref-date", "capacity-mode", "prefer-same-product-resource", "replan-unstarted-orders", "readiness-enabled", "readiness-mode", "readiness-source", "readiness-max-age-minutes", "format"], output: true }),
+    "auto-preview": operation(["auto-schedule", "preview"], { fields: { orderIds: "order-id", resourceIds: "resource-id" }, options: ["plan-id", "ref-date", "capacity-mode", "prefer-same-product-resource", "replan-unstarted-orders", "readiness-enabled", "readiness-mode", "readiness-source", "readiness-max-age-minutes", "format"], output: true, htmlPreview: true }),
     "auto-apply": operation(["auto-schedule", "apply"], { mutates: true, fields: { orderIds: "order-id", resourceIds: "resource-id" }, options: ["plan-id", "ref-date", "capacity-mode", "prefer-same-product-resource", "replan-unstarted-orders", "readiness-enabled", "readiness-mode", "readiness-source", "readiness-max-age-minutes", "format"], output: true }),
-    "move-order-preview": operation(["move", "order", "preview"], { fields: { orderId: "order-id", toTeamId: "to-team-id" }, required: ["orderId", "toTeamId"], options: ["format"], output: true }),
+    "move-order-preview": operation(["move", "order", "preview"], { fields: { orderId: "order-id", toTeamId: "to-team-id" }, required: ["orderId", "toTeamId"], options: ["format"], output: true, htmlPreview: true }),
     "move-order-apply": operation(["move", "order", "apply"], { mutates: true, fields: { orderId: "order-id", toTeamId: "to-team-id" }, required: ["orderId", "toTeamId"], options: ["format"], output: true }),
-    "move-schedule-preview": operation(["move", "schedule", "preview"], { fields: { scheduleId: "schedule-id", toTeamId: "to-team-id" }, required: ["scheduleId", "toTeamId"], options: ["format"], output: true }),
+    "move-schedule-preview": operation(["move", "schedule", "preview"], { fields: { scheduleId: "schedule-id", toTeamId: "to-team-id" }, required: ["scheduleId", "toTeamId"], options: ["format"], output: true, htmlPreview: true }),
     "move-schedule-apply": operation(["move", "schedule", "apply"], { mutates: true, fields: { scheduleId: "schedule-id", toTeamId: "to-team-id" }, required: ["scheduleId", "toTeamId"], options: ["format"], output: true }),
   },
   capacity: {
@@ -119,6 +120,9 @@ export async function prepareInvocation(domain, input) {
   if (input.outputPath && !spec.output) throw new Error("此业务操作不会生成可下载文件");
   if (spec.outputRequired && !input.outputPath) throw new Error("请提供保存模板或导出结果的位置");
 
+  if (input.format !== undefined && input.options?.format !== undefined) throw new Error("请只选择一种展示方式");
+  const requestedFormat = input.format ?? input.options?.format;
+  const useDefaultHtmlPreview = spec.htmlPreview && (requestedFormat === undefined || requestedFormat === "html") && !input.outputPath;
   const args = [...spec.tokens];
   for (const [field, optionName] of Object.entries(spec.fields)) {
     const value = input[field];
@@ -126,24 +130,29 @@ export async function prepareInvocation(domain, input) {
   }
   for (const [name, value] of Object.entries(input.options || {})) {
     if (!spec.options.includes(name)) throw new Error("包含当前业务操作不支持的设置项");
+    if (name === "format") continue;
     args.push(...valueArgs(name, value));
   }
-  if (input.format !== undefined) {
-    if (!["json", "timeline", "svg", "html"].includes(input.format)) throw new Error("展示格式不正确");
+  if (requestedFormat !== undefined) {
+    if (!["json", "timeline", "svg", "html"].includes(requestedFormat)) throw new Error("展示格式不正确");
     if (!spec.options.includes("format")) throw new Error("此业务操作不支持该展示方式");
-    args.push("--format", input.format);
+    if (!useDefaultHtmlPreview) args.push("--format", requestedFormat);
   }
   if (input.outputPath) args.push("--output", input.outputPath);
 
   let temporaryDirectory = "";
+  if (input.payload !== undefined || useDefaultHtmlPreview) temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "laps-mcp-"));
   if (input.filePath) {
     await validateInputFile(input.filePath);
     args.push("--file", input.filePath);
   } else if (input.payload !== undefined) {
-    temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "laps-mcp-"));
     const payloadPath = path.join(temporaryDirectory, "request.json");
     await writeFile(payloadPath, `${JSON.stringify(input.payload)}\n`, { mode: 0o600 });
     args.push("--file", payloadPath);
   }
-  return { args, spec, cleanup: async () => { if (temporaryDirectory) await rm(temporaryDirectory, { recursive: true, force: true }); } };
+  const previewArtifact = useDefaultHtmlPreview
+    ? { path: path.join(temporaryDirectory, "schedule-preview.html"), uri: `laps://scheduling-preview/${randomUUID()}.html`, mimeType: "text/html" }
+    : undefined;
+  if (previewArtifact) args.push("--format", "html", "--output", previewArtifact.path);
+  return { args, spec, previewArtifact, cleanup: async () => { if (temporaryDirectory) await rm(temporaryDirectory, { recursive: true, force: true }); } };
 }

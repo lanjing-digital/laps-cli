@@ -26,6 +26,21 @@ test("MCP creates and removes a private JSON payload file", async () => {
   await assert.rejects(() => readFile(payloadPath, "utf8"));
 });
 
+test("scheduling previews create a private HTML chart by default", async () => {
+  const invocation = await prepareInvocation("scheduling", { operation: "auto-preview" });
+  assert.equal(invocation.args.at(-4), "--format");
+  assert.equal(invocation.args.at(-3), "html");
+  assert.equal(invocation.args.at(-2), "--output");
+  assert.match(invocation.args.at(-1), /schedule-preview\.html$/);
+  assert.equal(invocation.previewArtifact?.mimeType, "text/html");
+  await invocation.cleanup();
+
+  const explicitHtml = await prepareInvocation("scheduling", { operation: "auto-preview", format: "html" });
+  assert.equal(explicitHtml.args.filter((item) => item === "--format").length, 1);
+  assert.equal(explicitHtml.previewArtifact?.mimeType, "text/html");
+  await explicitHtml.cleanup();
+});
+
 test("business result hides raw command output", { concurrency: false }, async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "laps-mcp-test-"));
   const fakeCLI = path.join(directory, "laps-cli");
@@ -43,6 +58,58 @@ test("business result hides raw command output", { concurrency: false }, async (
   } finally {
     if (originalPath === undefined) delete process.env.LAPS_MCP_CLI_PATH; else process.env.LAPS_MCP_CLI_PATH = originalPath;
     if (originalURL === undefined) delete process.env.SCHEDULING_API_BASE_URL; else process.env.SCHEDULING_API_BASE_URL = originalURL;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("scheduling preview returns the locally generated HTML as an MCP resource payload", { concurrency: false }, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "laps-mcp-chart-test-"));
+  const fakeCLI = path.join(directory, "laps-cli");
+  await writeFile(fakeCLI, "#!/usr/bin/env node\nconst output = process.argv[process.argv.indexOf('--output') + 1];\nawait (await import('node:fs/promises')).writeFile(output, '<!doctype html><title>排产图</title>');\nconsole.log(JSON.stringify({success:true,total:2}));\n", { mode: 0o700 });
+  await chmod(fakeCLI, 0o700);
+  const originalPath = process.env.LAPS_MCP_CLI_PATH;
+  const originalURL = process.env.SCHEDULING_API_BASE_URL;
+  process.env.LAPS_MCP_CLI_PATH = fakeCLI;
+  process.env.SCHEDULING_API_BASE_URL = "https://aps.example.com";
+  try {
+    const result = await executeDomain("scheduling", { operation: "auto-preview" });
+    assert.equal(result.success, true);
+    assert.equal(result.previewArtifact?.mimeType, "text/html");
+    assert.match(result.previewArtifact?.html || "", /排产图/);
+    assert.match(result.message, /排产图已附在本次对话中/);
+  } finally {
+    if (originalPath === undefined) delete process.env.LAPS_MCP_CLI_PATH; else process.env.LAPS_MCP_CLI_PATH = originalPath;
+    if (originalURL === undefined) delete process.env.SCHEDULING_API_BASE_URL; else process.env.SCHEDULING_API_BASE_URL = originalURL;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("MCP stdio scheduling preview embeds the HTML chart as a resource", { concurrency: false }, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "laps-mcp-stdio-chart-test-"));
+  const fakeCLI = path.join(directory, "laps-cli");
+  await writeFile(fakeCLI, "#!/usr/bin/env node\nconst output = process.argv[process.argv.indexOf('--output') + 1];\nawait (await import('node:fs/promises')).writeFile(output, '<!doctype html><title>排产图</title>');\nconsole.log(JSON.stringify({success:true,total:2}));\n", { mode: 0o700 });
+  await chmod(fakeCLI, 0o700);
+  const child = spawn(process.execPath, ["npm/bin/laps-mcp.js"], {
+    cwd: process.cwd(),
+    env: { ...process.env, LAPS_MCP_CLI_PATH: fakeCLI, SCHEDULING_API_BASE_URL: "https://aps.example.com" },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => { output += chunk; });
+  try {
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "test", version: "1" } } })}\n`);
+    for (let attempt = 0; attempt < 20 && !output.includes('"id":1'); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 50));
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} })}\n`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "laps_scheduling", arguments: { operation: "auto-preview" } } })}\n`);
+    for (let attempt = 0; attempt < 20 && !output.includes('"id":2'); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 50));
+    const message = output.trim().split(/\n/).map((line) => JSON.parse(line)).find((item) => item.id === 2);
+    const resource = message?.result?.content?.find((item) => item.type === "resource")?.resource;
+    assert.equal(resource?.mimeType, "text/html");
+    assert.match(resource?.text || "", /排产图/);
+  } finally {
+    child.kill();
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -72,14 +139,14 @@ test("MCP stdio server completes initialize and exposes seven fixed tools", asyn
   child.stdout.setEncoding("utf8");
   child.stdout.on("data", (chunk) => { output += chunk; });
   child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "test", version: "1" } } })}\n`);
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  for (let attempt = 0; attempt < 20 && !output.includes('"id":1'); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 50));
   child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} })}\n`);
   child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} })}\n`);
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  for (let attempt = 0; attempt < 20 && !output.includes('"id":2'); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 50));
   child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "laps_orders", arguments: { operation: "import-apply", payload: {} } } })}\n`);
-  await new Promise((resolve) => setTimeout(resolve, 150));
+  for (let attempt = 0; attempt < 20 && !output.includes('"id":3'); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 50));
   child.kill();
-  const messages = output.trim().split(/\n/).map((line) => JSON.parse(line));
+  const messages = output.trim().split(/\n/).filter(Boolean).map((line) => JSON.parse(line));
   const tools = messages.find((message) => message.id === 2)?.result?.tools || [];
   assert.deepEqual(tools.map((tool) => tool.name), ["laps_connection", "laps_orders", "laps_material_master", "laps_material_readiness", "laps_scheduling", "laps_capacity", "laps_master_data"]);
   const mutation = messages.find((message) => message.id === 3)?.result;

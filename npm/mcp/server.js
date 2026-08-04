@@ -38,7 +38,25 @@ const outputShape = z.object({
   preview: z.boolean().optional(),
   data: z.unknown().optional(),
   outputPath: z.string().optional(),
+  previewArtifact: z.object({ uri: z.string(), mimeType: z.literal("text/html") }).optional(),
 });
+
+function toolResult(result) {
+  const content = [{ type: "text", text: result.guidance ? `${result.message} ${result.guidance}` : result.message }];
+  if (result.previewArtifact) {
+    content.push({
+      type: "resource",
+      resource: {
+        uri: result.previewArtifact.uri,
+        mimeType: result.previewArtifact.mimeType,
+        text: result.previewArtifact.html,
+      },
+    });
+  }
+  const { previewArtifact, ...structuredContent } = result;
+  if (previewArtifact) structuredContent.previewArtifact = { uri: previewArtifact.uri, mimeType: previewArtifact.mimeType };
+  return { content, structuredContent, isError: !result.success };
+}
 
 function registerDomainTool(server, domain) {
   server.registerTool(`laps_${domain}`, {
@@ -49,11 +67,11 @@ function registerDomainTool(server, domain) {
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   }, async (input) => {
     const result = await executeDomain(domain, input);
-    return { content: [{ type: "text", text: result.guidance ? `${result.message} ${result.guidance}` : result.message }], structuredContent: result, isError: !result.success };
+    return toolResult(result);
   });
 }
 
-export function createServer(version = "0.1.9") {
+export function createServer(version = "0.1.10") {
   const server = new McpServer({ name: "laps-mcp", version });
   server.registerTool("laps_connection", {
     title: "LAPS 连接状态",
@@ -62,7 +80,7 @@ export function createServer(version = "0.1.9") {
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   }, async () => {
     const result = await connectionStatus();
-    return { content: [{ type: "text", text: result.guidance ? `${result.message} ${result.guidance}` : result.message }], structuredContent: result, isError: !result.success };
+    return toolResult(result);
   });
   for (const domain of domainNames) registerDomainTool(server, domain);
   return server;

@@ -1,4 +1,5 @@
 import { configuredServerURL } from "../lib/launcher.js";
+import { readFile } from "node:fs/promises";
 import { prepareInvocation } from "./operations.js";
 import { LapsCommandError, runLapsCommand } from "./runner.js";
 
@@ -57,7 +58,22 @@ export async function executeDomain(domain, input) {
       : saved
         ? `${label}已保存${scope}。`
         : `${label}已查询完成${scope}。`;
-    return { success: true, message, saved, preview, data: result.data, outputPath: input.outputPath };
+    const previewArtifact = invocation.previewArtifact
+      ? {
+        uri: invocation.previewArtifact.uri,
+        mimeType: invocation.previewArtifact.mimeType,
+        html: await readFile(invocation.previewArtifact.path, "utf8"),
+      }
+      : undefined;
+    return {
+      success: true,
+      message: previewArtifact ? `${message} 排产图已附在本次对话中。` : message,
+      saved,
+      preview,
+      data: result.data,
+      outputPath: input.outputPath,
+      previewArtifact,
+    };
   } catch (error) {
     const failure = failureMessage(error);
     return { success: false, ...failure };

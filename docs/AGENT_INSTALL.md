@@ -77,6 +77,8 @@ laps-mcp workbuddy config --install --yes
 
 Restart or reload WorkBuddy, then open its custom connector management page and select **Trust** for LAPS. The connector never opens a browser login flow; when login expires, have the user run `laps-cli auth login` in their terminal again.
 
+For the connector workflow, chart behavior, and troubleshooting details, see [WORKBUDDY_MCP.md](WORKBUDDY_MCP.md). In WorkBuddy, scheduling previews automatically return the locally generated HTML Gantt chart as a conversation attachment.
+
 ## Update
 
 Use the GitHub source for a public-repository update:
