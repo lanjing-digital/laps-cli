@@ -1,14 +1,16 @@
 {
   "name": "@lanjing-digital/laps-cli",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Cross-platform launcher and skill installer for LAPS CLI",
   "type": "module",
   "bin": {
-    "laps-cli": "npm/bin/laps-cli.js"
+    "laps-cli": "npm/bin/laps-cli.js",
+    "laps-mcp": "npm/bin/laps-mcp.js"
   },
   "files": [
     "npm/bin",
     "npm/lib",
+    "npm/mcp",
     "npm/test",
     "docs",
     "skills",
@@ -32,5 +34,9 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.25.76"
   }
 }

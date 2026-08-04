@@ -1,4 +1,4 @@
 interface:
   display_name: "LAPS Material Readiness"
-  short_description: "Analyze and inspect persisted or external material readiness"
-  default_prompt: "Use $laps-material-readiness to complete this material-readiness task through laps-cli."
+  short_description: "Review material availability for production orders"
+  default_prompt: "Use $laps-material-readiness to check material readiness for production orders."

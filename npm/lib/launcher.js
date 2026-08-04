@@ -21,6 +21,7 @@ export const allSkills = [
   "production-scheduling",
   "laps-capacity",
   "laps-master-data",
+  "laps-workbuddy-mcp",
 ];
 
 export function resolveTarget(platform = process.platform, arch = process.arch) {
@@ -80,7 +81,7 @@ async function saveSettings(baseURL) {
   await rename(temporary, destination);
 }
 
-async function configuredServerURL() {
+export async function configuredServerURL() {
   const fromEnvironment = String(process.env.SCHEDULING_API_BASE_URL || "").trim();
   if (fromEnvironment) return normalizeServerURL(fromEnvironment);
   const settings = await readJSON(settingsPath());
@@ -144,13 +145,13 @@ function takeOption(args, name, description = "a value") {
   return value;
 }
 
-function defaultInstallDir(target = resolveTarget()) {
+export function defaultInstallDir(target = resolveTarget()) {
   return target.goos === "windows"
     ? path.join(process.env.LOCALAPPDATA || os.homedir(), "laps-cli")
     : path.join(os.homedir(), ".local", "share", "laps-cli");
 }
 
-function defaultBinDir(installDir, target = resolveTarget()) {
+export function defaultBinDir(installDir, target = resolveTarget()) {
   return target.goos === "windows" ? path.join(installDir, "bin") : path.join(os.homedir(), ".local", "bin");
 }
 
@@ -222,6 +223,7 @@ async function installPackage(installDir) {
     await cp(packageRoot, staging, { recursive: true, filter: distributionFilter });
     await Promise.all([
       stat(path.join(staging, "npm", "bin", "laps-cli.js")),
+      stat(path.join(staging, "npm", "bin", "laps-mcp.js")),
       stat(path.join(staging, "npm", "lib", "launcher.js")),
       stat(path.join(staging, "skills", "laps-cli-auth", "SKILL.md")),
     ]);
@@ -237,12 +239,12 @@ function shellQuote(value) {
   return `'${String(value).replaceAll("'", `'"'"'`)}'`;
 }
 
-async function writeLauncher(installDir, binDir, target) {
+export async function writeLauncher(installDir, binDir, target, name, entrypoint) {
   await mkdir(binDir, { recursive: true });
-  const destination = path.join(binDir, target.goos === "windows" ? "laps-cli.cmd" : "laps-cli");
-  const nodeEntrypoint = path.join(installDir, "npm", "bin", "laps-cli.js");
+  const destination = path.join(binDir, target.goos === "windows" ? `${name}.cmd` : name);
+  const nodeEntrypoint = path.join(installDir, "npm", "bin", entrypoint);
   const content = target.goos === "windows"
-    ? `@echo off\r\nset "LAPS_CLI_INSTALL_DIR=${installDir.replaceAll('"', '""')}"\r\nnode "%LAPS_CLI_INSTALL_DIR%\\npm\\bin\\laps-cli.js" %*\r\n`
+    ? `@echo off\r\nset "LAPS_CLI_INSTALL_DIR=${installDir.replaceAll('"', '""')}"\r\nnode "%LAPS_CLI_INSTALL_DIR%\\npm\\bin\\${entrypoint}" %*\r\n`
     : `#!/usr/bin/env sh\nexport LAPS_CLI_INSTALL_DIR=${shellQuote(installDir)}\nexec node ${shellQuote(nodeEntrypoint)} "$@"\n`;
   const temporary = `${destination}.${process.pid}.tmp`;
   await writeFile(temporary, content, { mode: 0o755 });
@@ -278,9 +280,11 @@ async function install(argumentsList) {
   const skillsDir = path.resolve(options.skillsDir || defaultSkillsDir());
   const installedPackage = await installPackage(installDir);
   await ensureBinary(installedPackage);
-  const launcherPath = await writeLauncher(installedPackage, binDir, target);
+  const launcherPath = await writeLauncher(installedPackage, binDir, target, "laps-cli", "laps-cli.js");
+  const mcpLauncherPath = await writeLauncher(installedPackage, binDir, target, "laps-mcp", "laps-mcp.js");
   await writeFile(path.join(installedPackage, installationFile), `${JSON.stringify({ binDir, skillsDir, source: options.source }, null, 2)}\n`, { mode: 0o600 });
   process.stdout.write(`installed laps-cli launcher to ${launcherPath}\n`);
+  process.stdout.write(`installed WorkBuddy connector to ${mcpLauncherPath}\n`);
   if (!options.noSkills) {
     for (const skill of options.skills) await installSkill(skill, skillsDir, path.join(installedPackage, "skills"));
   }
@@ -319,7 +323,7 @@ async function runConfig(argumentsList) {
   return argumentsList.includes("--help") || argumentsList.includes("-h") ? 0 : 2;
 }
 
-async function installationSettings() {
+export async function installationSettings() {
   const target = resolveTarget();
   const installDir = path.resolve(process.env.LAPS_CLI_INSTALL_DIR || defaultInstallDir(target));
   const recorded = await readJSON(path.join(installDir, installationFile));

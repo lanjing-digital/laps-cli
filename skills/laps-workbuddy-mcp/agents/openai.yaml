@@ -1,0 +1,4 @@
+interface:
+  display_name: "LAPS WorkBuddy Connector"
+  short_description: "Configure and diagnose the LAPS WorkBuddy connector"
+  default_prompt: "Use $laps-workbuddy-mcp to connect this computer to LAPS in WorkBuddy."

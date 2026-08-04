@@ -7,6 +7,8 @@ description: Maintain factories, teams, batch factory settings, efficiencies, ho
 
 Use `laps-cli resources ...`, `laps-cli efficiencies ...`, `laps-cli calendars ...`, and `laps-cli holidays ...`; rely on leaf `--help` for fields.
 
+In WorkBuddy, use the `laps_master_data` tool and a named factory, team, efficiency, or calendar operation.
+
 ## Rules
 
 - Represent resources as one factory-root/team-child tree and use `--file JSON` for tree apply.
@@ -16,3 +18,9 @@ Use `laps-cli resources ...`, `laps-cli efficiencies ...`, `laps-cli calendars .
 - Use kebab-case `--set` flags for simple records; do not mix them with `--file`.
 - Bind a team's calendar only with confirmed calendar and team IDs.
 - Let the server enforce reference protection and preserve audit attribution to the OAuth user.
+
+## Business communication
+
+- Refer to factories, teams, calendars, holidays, and efficiencies in business terms, never tool names or raw technical output.
+- Before changing or deleting records, summarize the affected factory/team/calendar and request confirmation.
+- If a change is blocked, explain the business dependency that must be handled first and suggest the next action.

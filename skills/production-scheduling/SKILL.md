@@ -7,6 +7,8 @@ description: Query teams and schedules, preview or apply automatic scheduling an
 
 Use `laps-cli orders`, `laps-cli teams`, `laps-cli schedules`, `laps-cli auto-schedule`, and `laps-cli move`. Keep capacity writes in `$laps-capacity`; `capacity resolved` and `capacity list` are read-only diagnostics available to this workflow.
 
+In WorkBuddy, use the `laps_scheduling` tool and its named preview, apply, move, lock, or schedule operation.
+
 ## Workflow
 
 1. Resolve pending orders and exact team/schedule IDs with read commands. When the user requests every pending order, omit repeated `--order-id` flags and let the server select the pending scope.
@@ -19,3 +21,9 @@ Use `laps-cli orders`, `laps-cli teams`, `laps-cli schedules`, `laps-cli auto-sc
 8. Apply only after explicit user confirmation. Use the same `--plan-id` or `--ref-date` from the accepted preview so apply cannot resolve a different plan. Use exact IDs and require `--yes` for deletion.
 
 The server owns scheduling, splitting, dates, conflicts, capacity, and readiness rules. `category_daily_output` and readiness `ignore|warn|block` are request controls, not calculations to reproduce locally.
+
+## Business communication
+
+- Describe schedules as teams, dates, quantities, delays, and unscheduled orders. Present preview results as “试排方案，尚未保存”.
+- Before applying, moving, locking, or deleting, state the affected orders/schedule entries and obtain explicit confirmation.
+- Explain conflicts or unavailable capacity as planning conditions and next actions, never as CLI or server errors unless the user asks for technical diagnosis.

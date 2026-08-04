@@ -1,4 +1,4 @@
 interface:
-  display_name: "LAPS CLI Authentication"
-  short_description: "Sign in, inspect, or revoke personal LAPS CLI OAuth access"
-  default_prompt: "Use $laps-cli-auth to authenticate this LAPS CLI operation with my personal permissions."
+  display_name: "LAPS Account Access"
+  short_description: "Prepare the current user account for LAPS business work"
+  default_prompt: "Use $laps-cli-auth to prepare my LAPS account for this business task."

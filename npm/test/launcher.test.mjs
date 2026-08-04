@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { allSkills, normalizeServerURL, parseInstallArgs, parseUpdateArgs, resolveTarget } from "../lib/launcher.js";
+import { allSkills, normalizeServerURL, parseInstallArgs, parseUpdateArgs, resolveTarget, writeLauncher } from "../lib/launcher.js";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 test("maps supported Node targets to Go release assets", () => {
   assert.deepEqual(resolveTarget("darwin", "arm64"), { goos: "darwin", goarch: "arm64", executable: "laps-cli", asset: "laps-cli_darwin_arm64" });
@@ -29,4 +32,20 @@ test("normalizes configured APS server URLs and validates update sources", () =>
   assert.deepEqual(parseUpdateArgs([]), { source: "auto" });
   assert.deepEqual(parseUpdateArgs(["--source", "github"]), { source: "github" });
   assert.throws(() => parseUpdateArgs(["--source", "invalid"]), /auto, npm, or github/);
+});
+
+test("writes persistent CLI and MCP launchers without requiring Go", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "laps-launcher-test-"));
+  try {
+    const target = resolveTarget("darwin", "arm64");
+    const cli = await writeLauncher("/opt/laps", directory, target, "laps-cli", "laps-cli.js");
+    const mcp = await writeLauncher("/opt/laps", directory, target, "laps-mcp", "laps-mcp.js");
+    assert.match(await readFile(cli, "utf8"), /laps-cli\.js/);
+    assert.match(await readFile(mcp, "utf8"), /laps-mcp\.js/);
+    const windows = await writeLauncher("C:\\laps", directory, resolveTarget("win32", "x64"), "laps-mcp", "laps-mcp.js");
+    assert.match(windows, /laps-mcp\.cmd$/);
+    assert.match(await readFile(windows, "utf8"), /laps-mcp\.js/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

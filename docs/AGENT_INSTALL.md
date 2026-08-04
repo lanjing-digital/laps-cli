@@ -23,7 +23,7 @@ The public GitHub form is available immediately and is the canonical bootstrap p
 npx --yes github:lanjing-digital/laps-cli install --server https://aps.example.com
 ```
 
-It installs the self-updating launcher and all seven domain skills. By default, skills go to `~/.agents/skills`. To install for Codex instead:
+It installs the self-updating `laps-cli` and `laps-mcp` launchers, seven domain skills, and the WorkBuddy connector skill. By default, skills go to `~/.agents/skills`. To install for Codex instead:
 
 ```sh
 npx --yes github:lanjing-digital/laps-cli install --server https://aps.example.com --skills-dir "$HOME/.codex/skills"
@@ -53,6 +53,30 @@ laps-cli orders list --base-url https://aps.example.com
 
 `SCHEDULING_API_BASE_URL` is also supported for managed environments and takes precedence over the saved address.
 
+## WorkBuddy
+
+WorkBuddy must run under the same operating-system account that installed LAPS. First configure the APS address and complete the user's login outside the connector:
+
+```sh
+laps-cli config show-server
+laps-cli auth login
+laps-mcp status
+```
+
+Print the configuration for `~/.workbuddy/mcp.json`:
+
+```sh
+laps-mcp workbuddy config --print
+```
+
+Or write it only after the user confirms; the command backs up an existing file before merging the `laps` server entry:
+
+```sh
+laps-mcp workbuddy config --install --yes
+```
+
+Restart or reload WorkBuddy, then open its custom connector management page and select **Trust** for LAPS. The connector never opens a browser login flow; when login expires, have the user run `laps-cli auth login` in their terminal again.
+
 ## Update
 
 Use the GitHub source for a public-repository update:
@@ -75,3 +99,4 @@ laps-cli update --source npm
 - Request the user's confirmation before any `apply`, `publish`, or delete operation.
 - Do not put OAuth tokens in commands, files, or messages. Use `laps-cli auth login`.
 - Keep skills separated by domain; install only the requested skill names when a full install is unnecessary.
+- Respond in business language: state the result, affected scope, and next action. Do not expose command names, endpoints, tokens, or raw errors unless the user explicitly asks for technical diagnosis.

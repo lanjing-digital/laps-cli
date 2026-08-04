@@ -2,7 +2,7 @@
 
 LAPS CLI is the command-line client for the LAPS APS services. It calls the authenticated `/api/laps/*` boundary; scheduling, capacity and readiness rules continue to run on the server.
 
-The package includes seven focused agent skills:
+The package includes seven focused business skills and a separate WorkBuddy connector skill:
 
 - `laps-cli-auth`
 - `laps-orders`
@@ -11,10 +11,11 @@ The package includes seven focused agent skills:
 - `production-scheduling`
 - `laps-capacity`
 - `laps-master-data`
+- `laps-workbuddy-mcp`
 
 ## Install with npx
 
-Install the native CLI for the current platform and all skills from the public GitHub repository. Provide the remote APS server address during installation:
+Install the native CLI, WorkBuddy connector, and all skills for the current platform from the public GitHub repository. Provide the remote APS server address during installation:
 
 ```sh
 npx --yes github:lanjing-digital/laps-cli install --server https://aps.example.com
@@ -51,7 +52,25 @@ laps-cli config set-server --url https://aps.example.com
 laps-cli auth login
 ```
 
-`--base-url` is a one-command override, and `SCHEDULING_API_BASE_URL` takes priority over the saved setting. Use `laps-cli --help` and each command's `--help` for the current interface. Agent-specific installation guidance is in [docs/AGENT_INSTALL.md](docs/AGENT_INSTALL.md).
+`--base-url` is a one-command override, and `SCHEDULING_API_BASE_URL` takes priority over the saved setting. Use `laps-cli --help` and each command's `--help` for the current interface. Agent-specific installation guidance is in [docs/AGENT_INSTALL.md](docs/AGENT_INSTALL.md). For WorkBuddy, see [docs/WORKBUDDY_MCP.md](docs/WORKBUDDY_MCP.md).
+
+## WorkBuddy MCP connector
+
+The installer also creates `laps-mcp`, a standard MCP stdio connector. It uses the same remote APS address and the same operating-system account's LAPS login as `laps-cli`; it does not require Go or a second token.
+
+After installing and completing `laps-cli auth login`, print the WorkBuddy configuration:
+
+```sh
+laps-mcp workbuddy config --print
+```
+
+Or write it with an explicit confirmation:
+
+```sh
+laps-mcp workbuddy config --install --yes
+```
+
+Open WorkBuddy's custom connector settings afterwards and Trust the LAPS connector. The connector reports business outcomes and hides technical diagnostics by default.
 
 ## Update
 

@@ -7,6 +7,8 @@ description: Manage scheduling capacity through laps-cli. Use for resolved confi
 
 Use `laps-cli capacity ...`; retrieve exact flags from the matching leaf `--help` output. Use `capacity calendar` for resource or category date overrides and the prefilled category-capacity Excel template.
 
+In WorkBuddy, use the `laps_capacity` tool and choose the matching capacity, calendar, import, validation, or publication operation.
+
 ## Workflow
 
 1. Inspect `capacity resolved` or list/get the target resource.
@@ -15,3 +17,9 @@ Use `laps-cli capacity ...`; retrieve exact flags from the matching leaf `--help
 4. Apply creates a draft only; validate the draft separately. Publish only after explicit user confirmation because it changes automatic scheduling inputs.
 
 Use exact IDs and `--yes` for deletion. Use `capacity calendar history` only when the OAuth user has audit permission. Keep factory profile operations separate from plan import. The server owns capacity calculations and validation.
+
+## Business communication
+
+- Explain capacity changes as factories, production resources, product categories, dates, and daily output; explicitly call zero output a stop-work setting.
+- Mark import checks as unsaved and ask for confirmation before saving, publishing, restoring defaults, or deleting capacity data.
+- Convert data issues into a clear date range, resource, or category correction request; do not expose raw messages.

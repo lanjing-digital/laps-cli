@@ -1,4 +1,4 @@
 interface:
   display_name: "LAPS Capacity"
-  short_description: "Maintain capacity plans and resource or category date overrides"
-  default_prompt: "Use $laps-capacity to safely complete this capacity or capacity-calendar task through laps-cli."
+  short_description: "Review and maintain production capacity plans"
+  default_prompt: "Use $laps-capacity to review or maintain production capacity."

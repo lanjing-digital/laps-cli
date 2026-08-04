@@ -13,6 +13,7 @@ ALL_SKILLS=(
   production-scheduling
   laps-capacity
   laps-master-data
+  laps-workbuddy-mcp
 )
 
 skills=("${ALL_SKILLS[@]}")
