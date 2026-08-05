@@ -2,7 +2,7 @@
 
 LAPS CLI is the command-line client for the LAPS APS services. It calls the authenticated `/api/laps/*` boundary; scheduling, capacity and readiness rules continue to run on the server.
 
-The package includes seven focused business skills and a separate WorkBuddy connector skill:
+The package includes eight focused business skills and a separate WorkBuddy connector skill:
 
 - `laps-cli-auth`
 - `laps-orders`
@@ -11,6 +11,7 @@ The package includes seven focused business skills and a separate WorkBuddy conn
 - `production-scheduling`
 - `laps-capacity`
 - `laps-master-data`
+- `laps-scheduling-policy`
 - `laps-workbuddy-mcp`
 
 ## Install with npx
@@ -52,7 +53,7 @@ laps-cli config set-server --url https://aps.example.com
 laps-cli auth login
 ```
 
-`--base-url` is a one-command override, and `SCHEDULING_API_BASE_URL` takes priority over the saved setting. Use `laps-cli --help` and each command's `--help` for the current interface. Agent-specific installation guidance is in [docs/AGENT_INSTALL.md](docs/AGENT_INSTALL.md). For WorkBuddy, see [docs/WORKBUDDY_MCP.md](docs/WORKBUDDY_MCP.md).
+`--base-url` is a one-command override, and `SCHEDULING_API_BASE_URL` takes priority over the saved setting. Agent-specific installation guidance is in [docs/AGENT_INSTALL.md](docs/AGENT_INSTALL.md). For WorkBuddy, see [docs/WORKBUDDY_MCP.md](docs/WORKBUDDY_MCP.md).
 
 ## WorkBuddy MCP connector
 

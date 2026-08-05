@@ -1,4 +1,4 @@
 interface:
-  display_name: "LAPS Materials and BOMs"
-  short_description: "Maintain materials, BOMs, and inventory information"
-  default_prompt: "Use $laps-material-master to work with materials, BOMs, or inventory."
+  display_name: "LAPS Material Master"
+  short_description: "管理物料、BOM、库存导入与历史"
+  default_prompt: "Use $laps-material-master to complete this material or BOM task with a clear business summary."

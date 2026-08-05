@@ -809,6 +809,7 @@ func writeDomainUsage(w io.Writer) {
 	fmt.Fprintln(w, "  laps-cli resources list|get|apply|batch-settings|delete-factory|delete-team")
 	fmt.Fprintln(w, "  laps-cli efficiencies|calendars|holidays list|get|create|update|delete")
 	fmt.Fprintln(w, "  laps-cli calendars bind --calendar-id ID --team-id ID")
+	fmt.Fprintln(w, "  laps-cli scheduling-policy list|get|create|update|delete|clone|validate|publish|runs")
 }
 
 func writeClientError(stdout io.Writer, err error, command string) int {

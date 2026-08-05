@@ -106,6 +106,8 @@ func Run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return runResources(args[1:], stdout)
 	case "calendars":
 		return runCalendars(args[1:], stdout)
+	case "scheduling-policy":
+		return runSchedulingPolicy(args[1:], stdout)
 	case "efficiencies", "holidays":
 		fields := map[string][]string{
 			"efficiencies": {"team-id", "team-text", "product-type", "efficiency"},
@@ -401,6 +403,10 @@ func runAutoScheduleAction(args []string, persist bool, command string, stdout i
 	readinessMode := fs.String("readiness-mode", "inherit", "inherit | ignore | warn | block")
 	readinessSource := fs.String("readiness-source", "inherit", "inherit | auto | builtin | external")
 	readinessMaxAge := fs.Int("readiness-max-age-minutes", 0, "maximum readiness result age")
+	solverMode := fs.String("solver-mode", "inherit", "inherit | heuristic | shadow-portfolio | cp-sat | ga | portfolio | hybrid-ga-cp")
+	includeCandidatePlans := fs.Bool("include-candidate-plans", true, "return all available solver candidates for preview")
+	previewToken := fs.String("preview-token", "", "opaque token returned by auto-schedule preview")
+	candidateSolver := fs.String("candidate-solver", "", "solver selected from a preview")
 	planID := fs.String("plan-id", "", "capacity plan ID (required by server for auto-schedule)")
 	refDate := fs.String("ref-date", "", "planning reference date YYYY-MM-DD; defaults to today when --plan-id is omitted")
 	if code := parseNoArgs(fs, args, stdout, command); code != ExitOK {
@@ -433,6 +439,36 @@ func runAutoScheduleAction(args []string, persist bool, command string, stdout i
 	if !oneOf(*readinessSource, "inherit", "auto", "builtin", "external") {
 		return writeConfigError(stdout, "invalid --readiness-source: "+*readinessSource)
 	}
+	if !oneOf(*solverMode, "inherit", "heuristic", "shadow-portfolio", "cp-sat", "ga", "portfolio", "hybrid-ga-cp") {
+		return writeConfigError(stdout, "invalid --solver-mode: "+*solverMode)
+	}
+	if strings.TrimSpace(*previewToken) != "" {
+		if !persist {
+			return writeConfigError(stdout, "--preview-token can only be used with auto-schedule apply")
+		}
+		if !oneOf(*candidateSolver, "heuristic", "cp-sat", "ga", "hybrid-ga-cp") {
+			return writeConfigError(stdout, "--candidate-solver must be heuristic, cp-sat, ga, or hybrid-ga-cp")
+		}
+		forbidden := map[string]bool{}
+		fs.Visit(func(item *flag.Flag) { forbidden[item.Name] = true })
+		for _, name := range []string{"order-id", "resource-id", "plan-id", "ref-date", "capacity-mode", "prefer-same-product-resource", "replan-unstarted-orders", "readiness-enabled", "readiness-mode", "readiness-source", "readiness-max-age-minutes", "solver-mode", "include-candidate-plans"} {
+			if forbidden[name] {
+				return writeConfigError(stdout, "--preview-token cannot be combined with "+"--"+name)
+			}
+		}
+		apiClient, ok := newAPIClient(common, stdout, command, nil, nil)
+		if !ok {
+			return ExitUsage
+		}
+		apiClient.HTTPClient.Timeout = 120 * time.Second
+		response, err := apiClient.ApplyAutoSchedulePreview(context.Background(), client.ApplyAutoSchedulePreviewRequest{
+			PreviewToken: strings.TrimSpace(*previewToken), CandidateSolver: *candidateSolver,
+		})
+		if err != nil {
+			return writeAPIError(stdout, err, command, nil, nil)
+		}
+		return emitVisualResponse(stdout, apiClient, response, map[string]any{"command": command, "candidateSolver": *candidateSolver}, view)
+	}
 
 	apiClient, ok := newAPIClient(common, stdout, command, nil, nil)
 	if !ok {
@@ -443,6 +479,12 @@ func runAutoScheduleAction(args []string, persist bool, command string, stdout i
 		Persist:               persist,
 		CapacityPlanId:        strings.TrimSpace(*planID),
 		PlanningReferenceDate: resolvedRefDate,
+	}
+	if *solverMode != "inherit" {
+		request.SolverMode = *solverMode
+	}
+	if !persist {
+		request.IncludeCandidatePlans = includeCandidatePlans
 	}
 	if *capacityMode != "inherit" || len(resourceIDs) > 0 || *preferSameProductResource != "inherit" || *replanUnstartedOrders != "inherit" {
 		request.RunOverrides = &client.AutoScheduleRunOverrides{
@@ -474,6 +516,7 @@ func runAutoScheduleAction(args []string, persist bool, command string, stdout i
 		}
 		request.MaterialReadiness = control
 	}
+	apiClient.HTTPClient.Timeout = 120 * time.Second
 	response, err := apiClient.AutoSchedule(context.Background(), request)
 	if err != nil {
 		return writeAPIError(stdout, err, command, &persist, orderIDs)
@@ -879,7 +922,7 @@ func writeUsage(w io.Writer) {
 	fmt.Fprintln(w, "  laps-cli orders import template|preview|apply")
 	fmt.Fprintln(w, "  laps-cli schedules list|get|update|delete|lock|apply")
 	fmt.Fprintln(w, "  laps-cli auto-schedule preview [--order-id ID ...]")
-	fmt.Fprintln(w, "  laps-cli auto-schedule apply [--order-id ID ...]")
+	fmt.Fprintln(w, "  laps-cli auto-schedule apply --preview-token TOKEN --candidate-solver SOLVER")
 	fmt.Fprintln(w, "  laps-cli capacity resolved")
 	fmt.Fprintln(w, "  laps-cli capacity list [--resource plans|categories|profiles|capabilities]")
 	fmt.Fprintln(w, "  laps-cli capacity validate --plan-id ID")
@@ -892,6 +935,7 @@ func writeUsage(w io.Writer) {
 	fmt.Fprintln(w, "  laps-cli move order apply --order-id ID --to-team-id ID")
 	fmt.Fprintln(w, "  laps-cli move schedule preview --schedule-id ID --to-team-id ID")
 	fmt.Fprintln(w, "  laps-cli move schedule apply --schedule-id ID --to-team-id ID")
+	fmt.Fprintln(w, "  laps-cli scheduling-policy list|get|create|update|delete|clone|validate|publish|runs")
 	writeDomainUsage(w)
 }
 
@@ -920,8 +964,8 @@ func writeAuthLogoutUsage(w io.Writer) {
 
 func writeAutoScheduleUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  laps-cli auto-schedule preview [--base-url URL] [--order-id ID ...] [--plan-id ID | --ref-date YYYY-MM-DD] [--capacity-mode MODE] [--resource-id ID ...]")
-	fmt.Fprintln(w, "  laps-cli auto-schedule apply   [--base-url URL] [--order-id ID ...] [--plan-id ID | --ref-date YYYY-MM-DD] [--capacity-mode MODE] [--resource-id ID ...]")
+	fmt.Fprintln(w, "  laps-cli auto-schedule preview [--base-url URL] [--order-id ID ...] [--plan-id ID | --ref-date YYYY-MM-DD] [--solver-mode MODE]")
+	fmt.Fprintln(w, "  laps-cli auto-schedule apply --preview-token TOKEN --candidate-solver SOLVER")
 	writeEnvironment(w)
 }
 
@@ -951,6 +995,10 @@ func writeAutoScheduleActionUsage(w io.Writer, command string) {
 	fmt.Fprintln(w, "  --readiness-enabled VALUE   inherit | true | false")
 	fmt.Fprintln(w, "  --readiness-mode VALUE      inherit | ignore | warn | block")
 	fmt.Fprintln(w, "  --readiness-source VALUE    inherit | auto | builtin | external")
+	fmt.Fprintln(w, "  --solver-mode VALUE          inherit | heuristic | shadow-portfolio | cp-sat | ga | portfolio | hybrid-ga-cp")
+	fmt.Fprintln(w, "  --include-candidate-plans    true | false; preview defaults to true")
+	fmt.Fprintln(w, "  --preview-token TOKEN        apply exactly one previously previewed candidate")
+	fmt.Fprintln(w, "  --candidate-solver VALUE     required with --preview-token: heuristic | cp-sat | ga | hybrid-ga-cp")
 	fmt.Fprintln(w, "Output:")
 	fmt.Fprintln(w, "  Default JSON is stable for AI agents. HTML is the preferred readable Gantt view; SVG is a portable fallback.")
 }

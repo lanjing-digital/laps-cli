@@ -1,4 +1,4 @@
 interface:
   display_name: "LAPS Material Readiness"
-  short_description: "Review material availability for production orders"
-  default_prompt: "Use $laps-material-readiness to check material readiness for production orders."
+  short_description: "分析齐套情况并管理外部齐套结果"
+  default_prompt: "Use $laps-material-readiness to explain which orders are ready, at risk, or blocked."

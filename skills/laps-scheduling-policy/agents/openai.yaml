@@ -1,0 +1,4 @@
+interface:
+  display_name: "LAPS Scheduling Policy"
+  short_description: "维护排产策略并复盘求解历史"
+  default_prompt: "Use $laps-scheduling-policy to explain the scheduling-policy impact before publishing it."

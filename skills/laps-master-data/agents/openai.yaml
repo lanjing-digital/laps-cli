@@ -1,4 +1,4 @@
 interface:
-  display_name: "LAPS Factories and Calendars"
-  short_description: "Maintain factories, teams, and production calendars"
-  default_prompt: "Use $laps-master-data to maintain factories, teams, or production calendars."
+  display_name: "LAPS Master Data"
+  short_description: "维护工厂、班组、效率和生产日历"
+  default_prompt: "Use $laps-master-data to explain this master-data change and confirm its business impact before saving."

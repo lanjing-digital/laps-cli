@@ -24,12 +24,6 @@ type teamGroup struct {
 	blocks []Block
 }
 
-type monthSegment struct {
-	startDay int
-	dayCount int
-	label    string
-}
-
 func Timeline(payload map[string]any) string {
 	blocks := ExtractBlocks(payload)
 	if len(blocks) == 0 {
@@ -134,6 +128,9 @@ func SVG(payload map[string]any) string {
 // a sandboxed iframe. Labels deliberately stay outside schedule bars so short
 // allocations never produce overlapping text.
 func HTML(payload map[string]any) string {
+	if candidates := optimizerCandidateViews(payload); len(candidates) > 1 {
+		return candidateComparisonHTML(payload, candidates)
+	}
 	blocks := ExtractBlocks(payload)
 	if len(blocks) == 0 {
 		return `<!doctype html><html lang="en"><meta charset="utf-8"><body><p>No schedule blocks with start/end dates found in response.</p></body></html>` + "\n"
@@ -145,8 +142,6 @@ func HTML(payload map[string]any) string {
 	teamCount := len(groups)
 	timelineWidth := max(860, totalDays*22)
 	tickDays := dateTicks(totalDays)
-	monthSegments := monthSegmentsForRange(minDate, totalDays)
-	trackGrid := htmlGridLines(tickDays, totalDays)
 
 	var b strings.Builder
 	b.WriteString(`<!doctype html>
@@ -167,20 +162,17 @@ h1 { margin: 0; font-size: 20px; line-height: 1.3; color: #0f172a; }
 .axis, .gantt-row { display: grid; grid-template-columns: 220px var(--timeline-width); }
 .axis { position: sticky; top: 0; z-index: 3; background: #f8fafc; border-bottom: 1px solid #dbe3ef; }
 .axis-label { padding: 10px 14px; color: #64748b; font-size: 12px; font-weight: 600; }
-.axis-track { position: relative; height: 64px; overflow: visible; }
-.axis-month { position: absolute; top: 0; height: 24px; padding: 4px 8px; overflow: hidden; border-left: 1px solid #cbd5e1; border-bottom: 1px solid #dbe3ef; color: #334155; font-size: 11px; font-weight: 700; white-space: nowrap; }
-.tick { position: absolute; top: 24px; bottom: 0; border-left: 1px solid #dbe3ef; }
-.tick-label { position: absolute; top: 37px; transform: translateX(-50%); color: #64748b; font-size: 11px; white-space: nowrap; }
+.axis-track { position: relative; height: 40px; overflow: visible; }
+.tick { position: absolute; top: 0; bottom: 0; border-left: 1px solid #dbe3ef; }
+.tick-label { position: absolute; top: 11px; transform: translateX(-50%); color: #64748b; font-size: 11px; white-space: nowrap; }
 .tick-label.first { transform: none; }
 .tick-label.last { transform: translateX(-100%); }
 .team-heading { position: sticky; left: 0; z-index: 2; display: grid; grid-template-columns: 220px var(--timeline-width); background: #f1f5f9; border-top: 1px solid #dbe3ef; border-bottom: 1px solid #dbe3ef; }
 .team-heading span { padding: 8px 14px; color: #334155; font-size: 13px; font-weight: 700; }
 .gantt-row { min-height: 34px; background: #fff; }
 .order-label { position: sticky; left: 0; z-index: 1; display: flex; align-items: center; padding: 6px 14px; overflow: hidden; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #eef2f7; background: #fff; color: #334155; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.track { position: relative; min-height: 34px; border-bottom: 1px solid #eef2f7; background: #fff; }
-.track-grid { position: absolute; inset: 0; pointer-events: none; }
-.grid-line { position: absolute; top: 0; bottom: 0; border-left: 1px solid #eef2f7; }
-.bar { position: absolute; z-index: 1; top: 7px; height: 20px; min-width: 5px; border-radius: 4px; cursor: help; box-shadow: inset 0 0 0 1px rgb(15 23 42 / 12%); }
+.track { position: relative; min-height: 34px; border-bottom: 1px solid #eef2f7; background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(12.5% - 1px), #eef2f7 calc(12.5% - 1px), #eef2f7 12.5%); }
+.bar { position: absolute; top: 7px; height: 20px; min-width: 5px; border-radius: 4px; cursor: help; box-shadow: inset 0 0 0 1px rgb(15 23 42 / 12%); }
 .bar.late { outline: 2px solid #dc2626; outline-offset: 1px; }
 .bar:focus-visible { outline: 3px solid #0f172a; outline-offset: 2px; }
 .schedule-tooltip { position: fixed; z-index: 20; max-width: 340px; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: rgb(15 23 42 / 96%); color: #f8fafc; font-size: 12px; line-height: 1.55; white-space: pre-line; pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity 120ms ease-out, transform 120ms ease-out; }
@@ -195,12 +187,7 @@ h1 { margin: 0; font-size: 20px; line-height: 1.3; color: #0f172a; }
 `)
 	fmt.Fprintf(&b, `<main class="page" style="--timeline-width: %dpx; --timeline-total-width: %dpx">`, timelineWidth, timelineWidth+220)
 	fmt.Fprintf(&b, `<h1>排产甘特图</h1><p class="meta">%s 至 %s · %d 个排产区块 · %d 个班组</p>`, html.EscapeString(formatDate(minDate)), html.EscapeString(formatDate(maxDate)), len(blocks), teamCount)
-	b.WriteString(`<div class="gantt-scroll"><div class="gantt"><div class="axis"><div class="axis-label">订单 / 款号</div><div class="axis-track" aria-label="排产时间轴">`)
-	for _, segment := range monthSegments {
-		left := float64(segment.startDay) / float64(totalDays) * 100
-		width := float64(segment.dayCount) / float64(totalDays) * 100
-		fmt.Fprintf(&b, `<span class="axis-month" style="left: %.4f%%; width: %.4f%%">%s</span>`, left, width, html.EscapeString(segment.label))
-	}
+	b.WriteString(`<div class="gantt-scroll"><div class="gantt"><div class="axis"><div class="axis-label">订单 / 款号</div><div class="axis-track">`)
 	for index, day := range tickDays {
 		left := float64(day) / float64(totalDays) * 100
 		className := "tick-label"
@@ -227,7 +214,7 @@ h1 { margin: 0; font-size: 20px; line-height: 1.3; color: #0f172a; }
 				className += " late"
 			}
 			details := tooltipDetails(group.name, block)
-			fmt.Fprintf(&b, `<div class="gantt-row"><div class="order-label" title="%s">%s</div><div class="track">%s<div class="%s" data-tooltip="%s" aria-label="%s" aria-describedby="schedule-tooltip" role="img" tabindex="0" style="left: %.4f%%; width: %.4f%%; background: %s"></div></div></div>`, html.EscapeString(details), html.EscapeString(shorten(block.OrderLabel, 34)), trackGrid, className, html.EscapeString(details), html.EscapeString(details), left, width, colors[groupIndex%len(colors)])
+			fmt.Fprintf(&b, `<div class="gantt-row"><div class="order-label" title="%s">%s</div><div class="track"><div class="%s" data-tooltip="%s" aria-label="%s" aria-describedby="schedule-tooltip" role="img" tabindex="0" style="left: %.4f%%; width: %.4f%%; background: %s"></div></div></div>`, html.EscapeString(details), html.EscapeString(shorten(block.OrderLabel, 34)), className, html.EscapeString(details), html.EscapeString(details), left, width, colors[groupIndex%len(colors)])
 		}
 		b.WriteString(`</section>`)
 	}
@@ -275,6 +262,108 @@ h1 { margin: 0; font-size: 20px; line-height: 1.3; color: #0f172a; }
 	return b.String() + "\n"
 }
 
+type optimizerCandidateView struct {
+	solver      string
+	selected    bool
+	recommended bool
+	status      string
+	durationMs  string
+	metrics     map[string]any
+	payload     map[string]any
+}
+
+func optimizerCandidateViews(payload map[string]any) []optimizerCandidateView {
+	plan, ok := asMap(payload["plan"])
+	if !ok {
+		return nil
+	}
+	optimization, ok := asMap(plan["optimization"])
+	if !ok {
+		return nil
+	}
+	selected := stringValue(optimization["selectedSolver"])
+	recommended := stringValue(optimization["recommendedSolver"])
+	rawCandidates, ok := asSlice(optimization["candidates"])
+	if !ok {
+		return nil
+	}
+	views := make([]optimizerCandidateView, 0, len(rawCandidates))
+	for _, raw := range rawCandidates {
+		candidate, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		candidatePlan, ok := asMap(candidate["plan"])
+		if !ok || len(candidatePlan) == 0 {
+			continue
+		}
+		planCopy := make(map[string]any, len(candidatePlan))
+		for key, value := range candidatePlan {
+			planCopy[key] = value
+		}
+		delete(planCopy, "optimization")
+		viewPayload := make(map[string]any, len(payload))
+		for key, value := range payload {
+			viewPayload[key] = value
+		}
+		viewPayload["plan"] = planCopy
+		views = append(views, optimizerCandidateView{
+			solver: stringValue(candidate["solver"]), selected: stringValue(candidate["solver"]) == selected,
+			recommended: stringValue(candidate["solver"]) == recommended, status: stringValue(candidate["status"]),
+			durationMs: formatNumber(numberValue(candidate["durationMs"])), metrics: mapValue(candidate["metrics"]), payload: viewPayload,
+		})
+	}
+	return views
+}
+
+func candidateComparisonHTML(payload map[string]any, candidates []optimizerCandidateView) string {
+	optimization, _ := asMap(asMapOrEmpty(payload["plan"])["optimization"])
+	mode := html.EscapeString(stringValue(optimization["mode"]))
+	shadow, _ := optimization["shadow"].(bool)
+	var b strings.Builder
+	b.WriteString(`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>排产方案对比</title><style>
+body{margin:0;background:#f8fafc;color:#1e293b;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{padding:20px;min-width:760px}h1{margin:0;font-size:20px;color:#0f172a}.note{color:#64748b;font-size:13px;margin:7px 0 14px}.candidates{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}.candidate{border:1px solid #dbe3ef;border-radius:9px;background:#fff;padding:10px 12px;text-align:left;cursor:pointer;min-width:180px;color:#334155}.candidate.active{border-color:#2563eb;box-shadow:0 0 0 2px rgb(37 99 235 / 15%)}.candidate strong{display:block;color:#0f172a}.candidate small{display:block;margin-top:4px;color:#64748b}.badge{display:inline-block;margin-left:5px;border-radius:99px;padding:1px 6px;font-size:11px;background:#dbeafe;color:#1d4ed8}.recommended{background:#dcfce7;color:#166534}.chart{display:none;border:1px solid #dbe3ef;border-radius:10px;overflow:hidden;background:#fff}.chart.active{display:block}.chart iframe{border:0;width:100%;height:760px;display:block;background:#f8fafc}</style><body><main class="page">`)
+	fmt.Fprintf(&b, `<h1>排产方案对比</h1><p class="note">求解模式：%s · %s · 仅试算，尚未保存</p><div class="candidates">`, mode, map[bool]string{true: "当前策略处于影子对比模式", false: "可选择确认的排产方案"}[shadow])
+	for index, candidate := range candidates {
+		classes := "candidate"
+		if candidate.selected {
+			classes += " active"
+		}
+		label := html.EscapeString(candidate.solver)
+		selectedBadge := ""
+		if candidate.selected {
+			selectedBadge = `<span class="badge">当前采用</span>`
+		}
+		recommendedBadge := ""
+		if candidate.recommended {
+			recommendedBadge = `<span class="badge recommended">推荐</span>`
+		}
+		metrics := candidate.metrics
+		fmt.Fprintf(&b, `<button class="%s" type="button" data-index="%d"><strong>%s%s%s</strong><small>状态：%s · 耗时：%s ms</small><small>逾期：%s · 未排：%s · 拆单：%s · 约束问题：%s</small></button>`, classes, index, label, selectedBadge, recommendedBadge, html.EscapeString(candidate.status), html.EscapeString(candidate.durationMs), html.EscapeString(formatNumber(numberValue(metrics["lateOrderCount"]))), html.EscapeString(formatNumber(numberValue(metrics["unscheduledQty"]))), html.EscapeString(formatNumber(numberValue(metrics["splitCount"]))), html.EscapeString(formatNumber(numberValue(metrics["hardViolationCount"]))))
+	}
+	b.WriteString(`</div>`)
+	for index, candidate := range candidates {
+		classes := "chart"
+		if candidate.selected {
+			classes += " active"
+		}
+		chart := html.EscapeString(HTML(candidate.payload))
+		fmt.Fprintf(&b, `<section class="%s" data-chart="%d"><iframe title="%s 排产甘特图" srcdoc="%s"></iframe></section>`, classes, index, html.EscapeString(candidate.solver), chart)
+	}
+	b.WriteString(`</main><script>document.querySelectorAll('.candidate').forEach((button)=>button.addEventListener('click',()=>{const index=button.dataset.index;document.querySelectorAll('.candidate').forEach((item)=>item.classList.toggle('active',item===button));document.querySelectorAll('.chart').forEach((item)=>item.classList.toggle('active',item.dataset.chart===index));}));</script></body></html>`)
+	return b.String() + "\n"
+}
+
+func asMapOrEmpty(value any) map[string]any {
+	result, _ := asMap(value)
+	return result
+}
+
+func mapValue(value any) map[string]any {
+	result, _ := asMap(value)
+	return result
+}
+
 func tooltipDetails(teamName string, block Block) string {
 	deadline := "交期状态：待确认"
 	if block.CanMeetDeadline != nil {
@@ -297,36 +386,6 @@ func dateTicks(totalDays int) []int {
 		ticks = append(ticks, totalDays-1)
 	}
 	return ticks
-}
-
-func monthSegmentsForRange(startDate time.Time, totalDays int) []monthSegment {
-	endDate := startDate.AddDate(0, 0, totalDays-1)
-	segments := make([]monthSegment, 0, 3)
-	for cursor := startDate; !cursor.After(endDate); {
-		nextMonth := time.Date(cursor.Year(), cursor.Month()+1, 1, 0, 0, 0, 0, cursor.Location())
-		segmentEnd := nextMonth.AddDate(0, 0, -1)
-		if segmentEnd.After(endDate) {
-			segmentEnd = endDate
-		}
-		segments = append(segments, monthSegment{
-			startDay: daysBetween(startDate, cursor),
-			dayCount: daysBetween(cursor, segmentEnd) + 1,
-			label:    cursor.Format("2006年01月"),
-		})
-		cursor = segmentEnd.AddDate(0, 0, 1)
-	}
-	return segments
-}
-
-func htmlGridLines(tickDays []int, totalDays int) string {
-	var b strings.Builder
-	b.WriteString(`<span class="track-grid" aria-hidden="true">`)
-	for _, day := range tickDays {
-		left := float64(day) / float64(totalDays) * 100
-		fmt.Fprintf(&b, `<span class="grid-line" style="left: %.4f%%"></span>`, left)
-	}
-	b.WriteString(`</span>`)
-	return b.String()
 }
 
 func ExtractBlocks(payload map[string]any) []Block {

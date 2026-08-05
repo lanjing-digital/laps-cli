@@ -1,25 +1,12 @@
 ---
 name: laps-material-readiness
-description: Inspect and run material-readiness analysis through laps-cli. Use for readiness status, latest or persisted results, schema discovery, analysis, or importing external readiness results.
+description: 查询和执行物料齐套分析，并导入外部齐套结果。用户提到齐套、缺料、可排数量或外部物料状态时使用。
 ---
 
-# LAPS Material Readiness
+# 物料齐套
 
-Use `laps-cli readiness status|latest|get|schema|analyze` and `laps-cli readiness external import`; use leaf `--help` for exact input.
+先阅读 [命令手册](references/commands.md)。其中完整说明齐套查询、分析、结果读取和外部结果导入；不要探测命令帮助。
 
-In WorkBuddy, use the `laps_material_readiness` tool and select the requested analysis operation.
+分析前先确认订单范围和是否需要保存分析结果。分析后用“可排、预警、阻断、缺料数量和影响订单”解释结果。外部结果导入会改变后续齐套依据，必须先说明影响并取得确认。
 
-## Workflow
-
-1. Check status/schema when the source contract is uncertain.
-2. Use `latest` for current metadata or result and `get --analysis-id` for a persisted analysis.
-3. Run analysis with explicit order IDs or a JSON file.
-4. Import external results only from a trusted source and report the returned analysis ID.
-
-Do not calculate readiness locally. Preserve server warnings, source, freshness, and per-material shortage details.
-
-## Business communication
-
-- Explain whether orders are material-ready, what is short, and how current the result is; do not surface protocol or raw failure text.
-- Make clear whether the result is an existing analysis, a newly calculated analysis, or an imported external result.
-- When the analysis cannot run, tell the user which order, material source, or required business data needs attention.
+齐套失败或过期时，建议补齐数据、重新分析或在排产试算中按业务要求选择忽略、预警或阻断；不展示原始技术信息。

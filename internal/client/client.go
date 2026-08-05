@@ -37,6 +37,13 @@ type AutoScheduleRequest struct {
 	PlanningReferenceDate string                    `json:"planningReferenceDate,omitempty"`
 	RunOverrides          *AutoScheduleRunOverrides `json:"runOverrides,omitempty"`
 	MaterialReadiness     *MaterialReadinessControl `json:"materialReadiness,omitempty"`
+	SolverMode            string                    `json:"solverMode,omitempty"`
+	IncludeCandidatePlans *bool                     `json:"includeCandidatePlans,omitempty"`
+}
+
+type ApplyAutoSchedulePreviewRequest struct {
+	PreviewToken    string `json:"previewToken"`
+	CandidateSolver string `json:"candidateSolver"`
 }
 
 type MaterialReadinessControl struct {
@@ -104,6 +111,10 @@ func NewWithSessionCookie(baseURL, sessionCookie string) *Client {
 
 func (c *Client) AutoSchedule(ctx context.Context, req AutoScheduleRequest) (map[string]any, error) {
 	return c.Post(ctx, "/api/laps/auto-schedule", req)
+}
+
+func (c *Client) ApplyAutoSchedulePreview(ctx context.Context, req ApplyAutoSchedulePreviewRequest) (map[string]any, error) {
+	return c.Post(ctx, "/api/laps/auto-schedule/apply-preview", req)
 }
 
 func (c *Client) Move(ctx context.Context, req MoveRequest) (map[string]any, error) {

@@ -1,15 +1,12 @@
 ---
 name: laps-workbuddy-mcp
-description: Configure or diagnose the LAPS WorkBuddy MCP connector. Use when a user needs to install LAPS for WorkBuddy, set the APS system address, connect the same local account, trust the connector, update it, or resolve a connector readiness issue.
+description: 安装、配置和诊断 LAPS WorkBuddy 连接器，使 WorkBuddy 能以业务语言操作 APS 并展示正式甘特图。用户提到 WorkBuddy、MCP、连接器或排产图附件时使用。
 ---
 
-# LAPS WorkBuddy Connector
+# WorkBuddy 连接器
 
-Use this skill only for installing, connecting, updating, or diagnosing the WorkBuddy connector. Use the relevant business skill for orders, materials, readiness, scheduling, capacity, or master data.
+先阅读 [命令手册](references/commands.md)。其中包含安装、APS 地址设置、同账号登录、WorkBuddy 配置、信任和诊断的完整步骤；不要探测命令帮助。
 
-1. Ask for the organisation's APS system address if it is not already configured. Do not guess an address.
-2. Install with the public package, then configure the address and have the user complete account login in the same operating-system account.
-3. Generate the WorkBuddy configuration with `laps-mcp workbuddy config --print`; use `--install --yes` only after the user agrees to write the configuration.
-4. Remind the user to open WorkBuddy's custom connector page and Trust the LAPS connector.
-5. For a scheduling query or trial schedule, hand off to `$production-scheduling`. It must use the standard chart returned by the scheduling preview. Never prepare a local HTML page from order data as a substitute; only the connector's official Gantt result may be presented as a scheduling chart.
-6. Use `laps-mcp status` to diagnose readiness. Explain failures as missing address, incomplete login, missing permission, or unavailable APS service. Do not show command output, protocol details, credentials, or raw errors unless technical diagnosis is explicitly requested.
+连接器使用本机已安装的 LAPS 程序、当前系统账号的登录状态和已配置的 APS 地址。它不会要求用户提供令牌，也不会打开第二次登录。排产查询和试算会默认附上本地生成的正式 HTML 甘特图；不得用手写摘要页面代替。
+
+连接器写入业务数据前必须先说明影响并取得确认。若连接不可用，按“地址未设置、需要登录、权限不足、版本过旧或 WorkBuddy 尚未信任连接器”的业务顺序引导处理，不转述技术异常。

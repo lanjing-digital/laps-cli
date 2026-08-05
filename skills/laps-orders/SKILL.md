@@ -1,25 +1,12 @@
 ---
 name: laps-orders
-description: Manage production orders through laps-cli. Use to list, inspect, create, update, delete, export, download an import template, or preview and apply JSON or Excel order imports.
+description: 查询、创建、修改、删除、导出和批量导入生产订单。用户提到订单池、工单、制单号、订单导入或导出时使用。
 ---
 
-# LAPS Orders
+# 生产订单
 
-Use `laps-cli orders ...`; consult `laps-cli orders --help` and leaf `--help` output for exact flags.
+先阅读 [命令手册](references/commands.md)。它完整列出订单命令、字段、分页、导入模板和 JSON 示例；不要探测命令帮助。
 
-In WorkBuddy, use the `laps_orders` tool. Select an explicit business operation rather than passing command text.
+查询时优先明确订单范围。导入固定采用“先预检、后提交”：预检说明创建/更新数量与问题，提交前征得确认。默认只新建；按工单号覆盖必须明确选择 upsert。删除前复述订单 ID 和影响，并要求确认。
 
-## Rules
-
-- Use exact IDs for get, update, and delete. Deletion requires `--yes`.
-- Prefer `--set kebab-case=value` for simple records and `--file JSON` for complex input; never mix the two.
-- For imports, run `orders import preview` first. Apply only after the user confirms.
-- Import mode defaults to `create`; use `--mode upsert` only when matching by unique `sequenceNo` is intended.
-- Use `--file -` for JSON stdin and the template command for Excel input.
-- Report preview errors without applying; duplicate sequence numbers must be resolved at the source.
-
-## Business communication
-
-- Describe results as production orders, quantities, delivery dates, and affected records; do not mention CLI, HTTP, JSON, or raw errors.
-- Before an import or change, state the intended order scope. Say “仅检查，尚未写入” for a preview and ask for confirmation before saving.
-- Explain invalid or duplicate source data in terms of the affected order number and field, with a correction suggestion.
+用业务语言报告订单数量、交期、客户和导入结果；校验失败时指出需要修正的订单行、编号、日期或数量，不转述底层异常。

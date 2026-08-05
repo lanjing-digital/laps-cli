@@ -14,7 +14,7 @@ try {
     process.stdout.write(`${result.message}${result.guidance ? ` ${result.guidance}` : ""}\n`);
     process.exitCode = result.success ? 0 : 2;
   } else if (args.length === 0 || args[0] === "serve") {
-    await serve("0.1.12");
+    await serve("0.1.13");
   } else if (args.includes("--help") || args.includes("-h")) {
     process.stdout.write("Usage:\n  laps-mcp                         Start the WorkBuddy MCP server\n  laps-mcp status                  Check APS setup and login\n  laps-mcp workbuddy config --print\n  laps-mcp workbuddy config --install --yes\n");
   } else {

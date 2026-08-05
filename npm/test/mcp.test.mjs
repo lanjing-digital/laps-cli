@@ -41,6 +41,20 @@ test("scheduling previews create a private HTML chart by default", async () => {
   await explicitHtml.cleanup();
 });
 
+test("scheduling preview exposes solver choices and safe preview application", async () => {
+  const preview = await prepareInvocation("scheduling", { operation: "auto-preview", options: { "solver-mode": "portfolio", "include-candidate-plans": false } });
+  assert.ok(preview.args.includes("--solver-mode"));
+  assert.ok(preview.args.includes("portfolio"));
+  assert.ok(preview.args.includes("--include-candidate-plans"));
+  assert.ok(preview.args.includes("false"));
+  await preview.cleanup();
+
+  const apply = await prepareInvocation("scheduling", { operation: "auto-apply-preview", previewToken: "preview-token", candidateSolver: "cp-sat", confirm: true });
+  assert.deepEqual(apply.args, ["auto-schedule", "apply", "--preview-token", "preview-token", "--candidate-solver", "cp-sat"]);
+  await apply.cleanup();
+  await assert.rejects(() => prepareInvocation("scheduling", { operation: "auto-apply-preview", previewToken: "preview-token", candidateSolver: "cp-sat" }), /取得确认/);
+});
+
 test("business result hides raw command output", { concurrency: false }, async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "laps-mcp-test-"));
   const fakeCLI = path.join(directory, "laps-cli");
@@ -133,7 +147,7 @@ test("WorkBuddy configuration requires explicit write confirmation and preserves
   }
 });
 
-test("MCP stdio server completes initialize and exposes seven fixed tools", async () => {
+test("MCP stdio server completes initialize and exposes all fixed tools", async () => {
   const child = spawn(process.execPath, ["npm/bin/laps-mcp.js"], { cwd: process.cwd(), stdio: ["pipe", "pipe", "pipe"] });
   let output = "";
   child.stdout.setEncoding("utf8");
@@ -148,7 +162,7 @@ test("MCP stdio server completes initialize and exposes seven fixed tools", asyn
   child.kill();
   const messages = output.trim().split(/\n/).filter(Boolean).map((line) => JSON.parse(line));
   const tools = messages.find((message) => message.id === 2)?.result?.tools || [];
-  assert.deepEqual(tools.map((tool) => tool.name), ["laps_connection", "laps_orders", "laps_material_master", "laps_material_readiness", "laps_scheduling", "laps_capacity", "laps_master_data"]);
+  assert.deepEqual(tools.map((tool) => tool.name), ["laps_connection", "laps_orders", "laps_material_master", "laps_material_readiness", "laps_scheduling", "laps_capacity", "laps_master_data", "laps_scheduling_policy"]);
   const mutation = messages.find((message) => message.id === 3)?.result;
   assert.equal(mutation.isError, true);
   assert.match(mutation.content[0].text, /取得确认/);

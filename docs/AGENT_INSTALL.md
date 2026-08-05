@@ -23,7 +23,7 @@ The public GitHub form is available immediately and is the canonical bootstrap p
 npx --yes github:lanjing-digital/laps-cli install --server https://aps.example.com
 ```
 
-It installs the self-updating `laps-cli` and `laps-mcp` launchers, seven domain skills, and the WorkBuddy connector skill. By default, skills go to `~/.agents/skills`. To install for Codex instead:
+It installs the self-updating `laps-cli` and `laps-mcp` launchers, eight domain skills, and the WorkBuddy connector skill. By default, skills go to `~/.agents/skills`. To install for Codex instead:
 
 ```sh
 npx --yes github:lanjing-digital/laps-cli install --server https://aps.example.com --skills-dir "$HOME/.codex/skills"
@@ -101,4 +101,5 @@ laps-cli update --source npm
 - Request the user's confirmation before any `apply`, `publish`, or delete operation.
 - Do not put OAuth tokens in commands, files, or messages. Use `laps-cli auth login`.
 - Keep skills separated by domain; install only the requested skill names when a full install is unnecessary.
+- Read the matching skill and its `references/commands.md` before a business operation; the skill package contains the complete command syntax and examples.
 - Respond in business language: state the result, affected scope, and next action. Do not expose command names, endpoints, tokens, or raw errors unless the user explicitly asks for technical diagnosis.

@@ -1,4 +1,4 @@
 interface:
   display_name: "LAPS Capacity"
-  short_description: "Review and maintain production capacity plans"
-  default_prompt: "Use $laps-capacity to review or maintain production capacity."
+  short_description: "维护产能计划、资源和品类日期产能"
+  default_prompt: "Use $laps-capacity to explain this capacity change in business terms and obtain confirmation before saving it."

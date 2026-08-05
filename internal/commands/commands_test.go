@@ -149,6 +149,54 @@ func TestAutoScheduleRejectsInvalidReferenceDate(t *testing.T) {
 	}
 }
 
+func TestPreviewSendsSolverOptionsAndExplicitFalse(t *testing.T) {
+	var gotBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		_, _ = w.Write([]byte(`{"success":true,"plan":{"items":[]}}`))
+	}))
+	defer server.Close()
+	var stdout bytes.Buffer
+	code := Run([]string{"auto-schedule", "preview", "--base-url", server.URL, "--token", "token", "--solver-mode", "portfolio", "--include-candidate-plans=false"}, &stdout, &bytes.Buffer{})
+	if code != ExitOK {
+		t.Fatalf("unexpected exit code: %d output=%s", code, stdout.String())
+	}
+	if gotBody["solverMode"] != "portfolio" || gotBody["includeCandidatePlans"] != false {
+		t.Fatalf("unexpected solver request: %#v", gotBody)
+	}
+}
+
+func TestApplyPreviewUsesDedicatedEndpoint(t *testing.T) {
+	var gotPath string
+	var gotBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		_, _ = w.Write([]byte(`{"success":true,"plan":{"items":[]},"addedIds":["sched_1"]}`))
+	}))
+	defer server.Close()
+	var stdout bytes.Buffer
+	code := Run([]string{"auto-schedule", "apply", "--base-url", server.URL, "--token", "token", "--preview-token", "preview_token", "--candidate-solver", "cp-sat"}, &stdout, &bytes.Buffer{})
+	if code != ExitOK {
+		t.Fatalf("unexpected exit code: %d output=%s", code, stdout.String())
+	}
+	if gotPath != "/api/laps/auto-schedule/apply-preview" || gotBody["previewToken"] != "preview_token" || gotBody["candidateSolver"] != "cp-sat" {
+		t.Fatalf("unexpected safe apply request: path=%s body=%#v", gotPath, gotBody)
+	}
+}
+
+func TestApplyPreviewRejectsRecomputeArguments(t *testing.T) {
+	var stdout bytes.Buffer
+	code := Run([]string{"auto-schedule", "apply", "--preview-token", "preview_token", "--candidate-solver", "ga", "--order-id", "order_1"}, &stdout, &bytes.Buffer{})
+	if code != ExitUsage || !strings.Contains(stdout.String(), "--preview-token cannot be combined") {
+		t.Fatalf("unexpected result: code=%d output=%s", code, stdout.String())
+	}
+}
+
 func TestMissingOAuthLoginReturnsAuthJSON(t *testing.T) {
 	t.Setenv(envToken, "")
 	t.Setenv("LAPS_CLI_CONFIG_DIR", t.TempDir())

@@ -1,4 +1,4 @@
 interface:
-  display_name: "LAPS Account Access"
-  short_description: "Prepare the current user account for LAPS business work"
-  default_prompt: "Use $laps-cli-auth to prepare my LAPS account for this business task."
+  display_name: "LAPS CLI Authentication"
+  short_description: "设置 APS 地址并管理个人登录状态"
+  default_prompt: "Use $laps-cli-auth to set up my APS address and personal account access."

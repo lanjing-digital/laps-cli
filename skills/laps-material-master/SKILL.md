@@ -1,24 +1,12 @@
 ---
 name: laps-material-master
-description: Manage material records, BOM headers and items, inventory workbook imports, and import history through laps-cli. Use for material or BOM CRUD and previewed material-master imports.
+description: 管理物料、BOM、库存导入及导入历史。用户提到物料编码、BOM、库存、仓库或物料数据导入时使用。
 ---
 
-# LAPS Material Master
+# 物料与 BOM
 
-Use `laps-cli materials ...`, `laps-cli boms ...`, and `laps-cli material-import ...`. Read leaf `--help` output for fields.
+先阅读 [命令手册](references/commands.md)。其中包含所有物料、BOM、库存导入命令、字段与文件示例；不要探测命令帮助。
 
-In WorkBuddy, use the `laps_material_master` tool and its named business operation.
+先查询现有编码和 BOM，再创建或修改。导入库存先下载模板或准备 JSON，先预检并解释新增、覆盖与问题，再在用户确认后提交。删除前说明会影响的物料或 BOM，并要求明确确认。
 
-## Rules
-
-- Use flags for simple objects and `--file JSON` for BOM structures; do not mix business flags with `--file`.
-- Use exact IDs and `--yes` for deletion. Do not bypass server reference protection.
-- Download the workbook template, then run `material-import preview` before `apply`.
-- Material imports update matching codes and do not delete existing rows omitted from the file.
-- Apply only after the user confirms the preview counts, warnings, and scope.
-
-## Business communication
-
-- Report materials, BOMs, stock records, and affected counts in plain production language; hide implementation details and raw error messages.
-- Clearly distinguish a workbook check from a saved material or BOM change, and obtain confirmation before saving.
-- For data issues, identify the material code, BOM relation, or workbook column that the user should correct.
+面向业务人员说明物料、用量、库存和导入结果；把格式或引用问题转化为可修正的字段建议。

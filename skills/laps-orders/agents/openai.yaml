@@ -1,4 +1,4 @@
 interface:
-  display_name: "LAPS Production Orders"
-  short_description: "Review and safely maintain production orders"
-  default_prompt: "Use $laps-orders to help me review or maintain production orders."
+  display_name: "LAPS Orders"
+  short_description: "查询、维护、导出和批量导入生产订单"
+  default_prompt: "Use $laps-orders to complete this order task and describe the business impact before saving."

@@ -14,7 +14,7 @@ function recordCount(data) {
 
 function operationLabel(domain, operation) {
   const labels = {
-    orders: "生产订单", material_master: "物料与 BOM", material_readiness: "物料齐套", scheduling: "生产排程", capacity: "产能配置", master_data: "工厂与基础资料",
+    orders: "生产订单", material_master: "物料与 BOM", material_readiness: "物料齐套", scheduling: "生产排程", capacity: "产能配置", master_data: "工厂与基础资料", scheduling_policy: "排产策略",
   };
   if (operation.includes("preview")) return `${labels[domain]}试算`;
   if (operation.includes("template")) return `${labels[domain]}模板准备`;
@@ -48,7 +48,7 @@ export async function executeDomain(domain, input) {
   try {
     invocation = await prepareInvocation(domain, input);
     const result = await runLapsCommand(invocation.args);
-    const preview = input.operation.includes("preview");
+    const preview = !invocation.spec.mutates && input.operation.includes("preview");
     const count = recordCount(result.data);
     const saved = invocation.spec.mutates;
     const label = operationLabel(domain, input.operation);

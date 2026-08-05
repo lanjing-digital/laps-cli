@@ -1,26 +1,12 @@
 ---
 name: laps-master-data
-description: Maintain factories, teams, batch factory settings, efficiencies, holiday calendars, holiday dates, and calendar bindings through laps-cli. Use for resource-tree and scheduling master-data operations.
+description: 管理工厂、班组、工厂批量设置、效率、假期日历及班组日历绑定。用户提到工厂、班组、效率、放假或基础资料时使用。
 ---
 
-# LAPS Master Data
+# 工厂与基础资料
 
-Use `laps-cli resources ...`, `laps-cli efficiencies ...`, `laps-cli calendars ...`, and `laps-cli holidays ...`; rely on leaf `--help` for fields.
+先阅读 [命令手册](references/commands.md)。其中完整列出工厂树、批量设置、效率、日历与休假日期命令及 JSON 示例；不要探测命令帮助。
 
-In WorkBuddy, use the `laps_master_data` tool and a named factory, team, efficiency, or calendar operation.
+修改前先查询并确认准确工厂、班组或日历。批量工厂设置必须说明涉及工厂和将变更的启用状态、归属或总部标识。删除工厂或班组前明确引用关系和影响，并要求确认。
 
-## Rules
-
-- Represent resources as one factory-root/team-child tree and use `--file JSON` for tree apply.
-- Use `resources batch-settings` for a single transactional update across exact factory IDs; direct flags and `--file JSON` are mutually exclusive.
-- Keep virtual-line configuration inside `resources apply --file`; do not create a parallel capacity model.
-- Use exact factory, team, or record IDs. Every deletion requires `--yes`.
-- Use kebab-case `--set` flags for simple records; do not mix them with `--file`.
-- Bind a team's calendar only with confirmed calendar and team IDs.
-- Let the server enforce reference protection and preserve audit attribution to the OAuth user.
-
-## Business communication
-
-- Refer to factories, teams, calendars, holidays, and efficiencies in business terms, never tool names or raw technical output.
-- Before changing or deleting records, summarize the affected factory/team/calendar and request confirmation.
-- If a change is blocked, explain the business dependency that must be handled first and suggest the next action.
+用生产管理语言描述工厂、班组、效率和日历的影响；遇到引用保护时说明需先处理哪些业务关联。

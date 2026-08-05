@@ -1,4 +1,4 @@
 interface:
-  display_name: "LAPS Production Scheduling"
-  short_description: "Preview and confirm production scheduling changes"
-  default_prompt: "Use $production-scheduling to preview a production schedule and save it only after I confirm."
+  display_name: "Production Scheduling"
+  short_description: "试排、比较方案并安全确认生产排程"
+  default_prompt: "Use $production-scheduling to compare trial schedules with the official Gantt chart and ask for confirmation before saving."

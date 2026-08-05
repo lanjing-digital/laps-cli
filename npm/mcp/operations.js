@@ -46,8 +46,9 @@ export const domainOperations = {
     "schedules-list": operation(["schedules", "list"], { options: ["team-id", "order-id", "limit", "page-token", "format"], output: true, htmlPreview: true }),
     "schedules-lock": operation(["schedules", "lock"], { mutates: true, fields: { id: "id" }, required: ["id"], options: ["locked"] }),
     "schedules-apply": operation(["schedules", "apply"], { mutates: true, file: true }),
-    "auto-preview": operation(["auto-schedule", "preview"], { fields: { orderIds: "order-id", resourceIds: "resource-id" }, options: ["plan-id", "ref-date", "capacity-mode", "prefer-same-product-resource", "replan-unstarted-orders", "readiness-enabled", "readiness-mode", "readiness-source", "readiness-max-age-minutes", "format"], output: true, htmlPreview: true }),
+    "auto-preview": operation(["auto-schedule", "preview"], { fields: { orderIds: "order-id", resourceIds: "resource-id" }, options: ["plan-id", "ref-date", "capacity-mode", "prefer-same-product-resource", "replan-unstarted-orders", "readiness-enabled", "readiness-mode", "readiness-source", "readiness-max-age-minutes", "solver-mode", "include-candidate-plans", "format"], output: true, htmlPreview: true }),
     "auto-apply": operation(["auto-schedule", "apply"], { mutates: true, fields: { orderIds: "order-id", resourceIds: "resource-id" }, options: ["plan-id", "ref-date", "capacity-mode", "prefer-same-product-resource", "replan-unstarted-orders", "readiness-enabled", "readiness-mode", "readiness-source", "readiness-max-age-minutes", "format"], output: true }),
+    "auto-apply-preview": operation(["auto-schedule", "apply"], { mutates: true, fields: { previewToken: "preview-token", candidateSolver: "candidate-solver" }, required: ["previewToken", "candidateSolver"], options: ["format"], output: true }),
     "move-order-preview": operation(["move", "order", "preview"], { fields: { orderId: "order-id", toTeamId: "to-team-id" }, required: ["orderId", "toTeamId"], options: ["format"], output: true, htmlPreview: true }),
     "move-order-apply": operation(["move", "order", "apply"], { mutates: true, fields: { orderId: "order-id", toTeamId: "to-team-id" }, required: ["orderId", "toTeamId"], options: ["format"], output: true }),
     "move-schedule-preview": operation(["move", "schedule", "preview"], { fields: { scheduleId: "schedule-id", toTeamId: "to-team-id" }, required: ["scheduleId", "toTeamId"], options: ["format"], output: true, htmlPreview: true }),
@@ -87,6 +88,14 @@ export const domainOperations = {
     "resources-batch-settings": operation(["resources", "batch-settings"], { mutates: true, file: true, fields: { factoryIds: "factory-id" }, options: ["enabled", "ownership-type", "is-headquarters"] }),
     ...Object.fromEntries(["efficiencies", "calendars", "holidays"].flatMap((root) => Object.entries(crud(root)).map(([name, spec]) => [`${root}-${name}`, spec]))),
     "calendars-bind": operation(["calendars", "bind"], { mutates: true, fields: { calendarId: "calendar-id", teamId: "team-id" }, required: ["calendarId", "teamId"] }),
+  },
+  scheduling_policy: {
+    ...crud("scheduling-policy"),
+    clone: operation(["scheduling-policy", "clone"], { mutates: true, fields: { id: "id" }, required: ["id"] }),
+    validate: operation(["scheduling-policy", "validate"], { mutates: true, fields: { id: "id" }, required: ["id"] }),
+    publish: operation(["scheduling-policy", "publish"], { mutates: true, fields: { id: "id" }, required: ["id"] }),
+    "runs-list": operation(["scheduling-policy", "runs", "list"], { options: ["mode", "status", "solver", "from", "to", "limit", "page-token"] }),
+    "runs-get": operation(["scheduling-policy", "runs", "get"], { fields: { runId: "run-id" }, required: ["runId"] }),
   },
 };
 

@@ -21,6 +21,9 @@ const inputShape = (domain) => ({
   calendarId: z.string().min(1).optional(),
   analysisId: z.string().min(1).optional(),
   planId: z.string().min(1).optional(),
+  runId: z.string().min(1).optional(),
+  previewToken: z.string().min(1).optional(),
+  candidateSolver: z.enum(["heuristic", "cp-sat", "ga", "hybrid-ga-cp"]).optional(),
   options: z.record(scalar.or(z.array(scalar))).optional(),
   payload: z.unknown().optional(),
   filePath: z.string().min(1).optional(),
@@ -71,7 +74,7 @@ function registerDomainTool(server, domain) {
   });
 }
 
-export function createServer(version = "0.1.12") {
+export function createServer(version = "0.1.13") {
   const server = new McpServer({ name: "laps-mcp", version });
   server.registerTool("laps_connection", {
     title: "LAPS 连接状态",
