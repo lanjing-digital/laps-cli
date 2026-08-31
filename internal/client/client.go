@@ -18,6 +18,11 @@ import (
 
 const DefaultBaseURL = "https://lanjingshuzi.cn:3000"
 
+const (
+	clientName       = "laps-cli"
+	clientHeaderName = "X-LAPS-Client"
+)
+
 type Client struct {
 	BaseURL       string
 	Token         string
@@ -292,6 +297,8 @@ func (c *Client) doResponse(httpReq *http.Request) (*http.Response, error) {
 			request.Header.Set("Authorization", "Bearer "+token)
 		}
 		request.Header.Set("Accept", "application/json")
+		request.Header.Set("User-Agent", clientName)
+		request.Header.Set(clientHeaderName, clientName)
 
 		resp, err := httpClient.Do(request)
 		if err != nil {

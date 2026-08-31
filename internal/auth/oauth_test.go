@@ -85,6 +85,9 @@ func TestManagerRefreshesExpiringTokenAndPersistsRotation(t *testing.T) {
 			return
 		}
 		refreshCalls++
+		if r.Header.Get(clientHeaderName) != ClientID || r.UserAgent() != ClientID {
+			t.Fatalf("missing CLI source markers: client=%q userAgent=%q", r.Header.Get(clientHeaderName), r.UserAgent())
+		}
 		if err := r.ParseForm(); err != nil {
 			t.Fatalf("parse form: %v", err)
 		}
@@ -135,6 +138,9 @@ func TestManagerLogoutRevokesBeforeRemovingCredentials(t *testing.T) {
 		if r.URL.Path != "/api/auth/oauth/revoke" {
 			http.NotFound(w, r)
 			return
+		}
+		if r.Header.Get(clientHeaderName) != ClientID || r.UserAgent() != ClientID {
+			t.Fatalf("missing CLI source markers: client=%q userAgent=%q", r.Header.Get(clientHeaderName), r.UserAgent())
 		}
 		if err := r.ParseForm(); err != nil {
 			t.Fatalf("parse revoke form: %v", err)

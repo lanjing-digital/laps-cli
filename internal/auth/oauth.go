@@ -22,6 +22,13 @@ import (
 
 const ClientID = "laps-cli"
 
+const clientHeaderName = "X-LAPS-Client"
+
+func markCLIRequest(request *http.Request) {
+	request.Header.Set("User-Agent", ClientID)
+	request.Header.Set(clientHeaderName, ClientID)
+}
+
 type BrowserOpener func(string) error
 
 type LoginOptions struct {
@@ -245,6 +252,7 @@ func (m *Manager) Logout(ctx context.Context) error {
 			return requestErr
 		}
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		markCLIRequest(request)
 		response, callErr := httpClient(m.HTTPClient).Do(request)
 		if callErr != nil {
 			return fmt.Errorf("revoke OAuth token: %w", callErr)
@@ -281,6 +289,7 @@ func requestToken(ctx context.Context, configuredClient *http.Client, baseURL st
 		return tokens, err
 	}
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	markCLIRequest(request)
 	request.Header.Set("Accept", "application/json")
 	response, err := httpClient(configuredClient).Do(request)
 	if err != nil {

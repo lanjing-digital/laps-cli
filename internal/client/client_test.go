@@ -78,10 +78,14 @@ func TestAutoScheduleSendsBearerAndBody(t *testing.T) {
 
 func TestGetSendsBearerAndQuery(t *testing.T) {
 	var gotAuth string
+	var gotClient string
+	var gotUserAgent string
 	var gotQuery url.Values
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
+		gotClient = r.Header.Get(clientHeaderName)
+		gotUserAgent = r.UserAgent()
 		gotQuery = r.URL.Query()
 		if r.Method != http.MethodGet {
 			t.Fatalf("unexpected method: %s", r.Method)
@@ -103,6 +107,9 @@ func TestGetSendsBearerAndQuery(t *testing.T) {
 	}
 	if gotAuth != "Bearer secret" {
 		t.Fatalf("unexpected auth header: %q", gotAuth)
+	}
+	if gotClient != clientName || gotUserAgent != clientName {
+		t.Fatalf("missing CLI source markers: client=%q userAgent=%q", gotClient, gotUserAgent)
 	}
 	if gotQuery.Get("status") != "pending" || gotQuery.Get("pageSize") != "50" {
 		t.Fatalf("unexpected query: %#v", gotQuery)

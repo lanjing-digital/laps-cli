@@ -74,7 +74,7 @@ function registerDomainTool(server, domain) {
   });
 }
 
-export function createServer(version = "0.1.13") {
+export function createServer(version = "0.1.14") {
   const server = new McpServer({ name: "laps-mcp", version });
   server.registerTool("laps_connection", {
     title: "LAPS 连接状态",
