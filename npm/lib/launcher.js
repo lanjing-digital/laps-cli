@@ -5,13 +5,14 @@ import { accessSync, constants } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 const require = createRequire(import.meta.url);
 const packageInfo = require("../../package.json");
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const releaseRepository = process.env.LAPS_CLI_RELEASE_REPOSITORY || "lanjing-digital/laps-cli";
 const installationFile = "installation.json";
+export const cliVersion = packageInfo.version;
 
 export const allSkills = [
   "laps-cli-auth",
@@ -21,6 +22,7 @@ export const allSkills = [
   "production-scheduling",
   "laps-capacity",
   "laps-master-data",
+  "laps-scheduling-policy",
   "laps-workbuddy-mcp",
 ];
 
@@ -98,7 +100,7 @@ function cachePath(target, root = packageRoot) {
 }
 
 async function download(url) {
-  const response = await fetch(url);
+  const response = await fetch(url, { signal: AbortSignal.timeout(120000) });
   if (!response.ok) throw new Error(`download failed (${response.status}): ${url}`);
   return Buffer.from(await response.arrayBuffer());
 }
@@ -169,26 +171,45 @@ export function parseInstallArgs(argumentsList) {
   const skillsDir = takeOption(args, "--skills-dir", "a directory");
   const installDir = takeOption(args, "--install-dir", "a directory");
   const server = takeOption(args, "--server", "an http(s) URL");
+  const defaultServer = takeOption(args, "--default-server", "an http(s) URL");
+  const nonInteractiveFlag = takeSwitch(args, "--non-interactive");
+  const yesFlag = takeSwitch(args, "--yes");
+  const nonInteractive = nonInteractiveFlag || yesFlag;
+  const managed = takeSwitch(args, "--managed");
   const source = takeOption(args, "--source", "auto, npm, or github") || "github";
   const noSkills = args.includes("--no-skills");
   if (noSkills) args.splice(args.indexOf("--no-skills"), 1);
   if (!validUpdateSource(source) || source === "auto") throw new Error("--source must be npm or github when installing");
   if (server) normalizeServerURL(server);
+  if (defaultServer) normalizeServerURL(defaultServer);
+  if (server && defaultServer) throw new Error("--server and --default-server are mutually exclusive");
+  if (managed && (installDir || binDir)) throw new Error("--managed uses the runtime's package and bin directories");
   if (args.some((value) => value.startsWith("--"))) throw new Error(`unknown install option: ${args.find((value) => value.startsWith("--"))}`);
   if (args.some((skill) => !allSkills.includes(skill))) throw new Error(`unknown skill: ${args.find((skill) => !allSkills.includes(skill))}`);
   if (noSkills && args.length > 0) throw new Error("skill names cannot be used with --no-skills");
-  return { binDir, skillsDir, installDir, server, source, noSkills, skills: args.length ? args : allSkills };
+  return { binDir, skillsDir, installDir, server, defaultServer, nonInteractive, managed, source, noSkills, skills: args.length ? args : allSkills };
+}
+
+function takeSwitch(args, name) {
+  const index = args.indexOf(name);
+  if (index < 0) return false;
+  args.splice(index, 1);
+  return true;
 }
 
 export function parseUpdateArgs(argumentsList) {
   const args = [...argumentsList];
   const source = takeOption(args, "--source", "auto, npm, or github") || "auto";
+  const check = takeSwitch(args, "--check");
+  const json = takeSwitch(args, "--json");
+  const force = takeSwitch(args, "--force");
   if (!validUpdateSource(source)) throw new Error("--source must be auto, npm, or github");
   if (args.length) throw new Error(`unknown update option: ${args[0]}`);
-  return { source };
+  if (check && force) throw new Error("--check and --force are mutually exclusive");
+  return { source, check, json, force };
 }
 
-async function installSkill(skill, targetRoot, sourceRoot) {
+export async function installSkill(skill, targetRoot, sourceRoot, version = cliVersion, log = process.stdout) {
   const source = path.join(sourceRoot, skill);
   await Promise.all([stat(path.join(source, "SKILL.md")), stat(path.join(source, "agents", "openai.yaml"))]);
   await mkdir(targetRoot, { recursive: true });
@@ -201,23 +222,39 @@ async function installSkill(skill, targetRoot, sourceRoot) {
     await cp(source, staging, { recursive: true });
     await Promise.all([stat(path.join(staging, "SKILL.md")), stat(path.join(staging, "agents", "openai.yaml"))]);
     try { await stat(destination); await rename(destination, backup); } catch (error) { if (error.code !== "ENOENT") throw error; }
-    await rename(staging, destination);
+    await writeFile(path.join(staging, ".laps-version.json"), `${JSON.stringify({ version })}\n`);
+    try { await rename(staging, destination); } catch (error) {
+      try { await rename(backup, destination); } catch (restore) { if (restore.code !== "ENOENT") throw restore; }
+      throw error;
+    }
   } finally {
     await rm(stagingRoot, { recursive: true, force: true });
   }
-  process.stdout.write(`installed ${skill} to ${destination}\n`);
+  log.write(`installed ${skill} to ${destination}\n`);
 }
 
 function distributionFilter(source) {
   return ![".git", "node_modules", "vendor", "dist"].includes(path.basename(source));
 }
 
-function npmCommand(target = resolveTarget()) {
-  return target.goos === "windows" ? "npm.cmd" : "npm";
+export function packageManagerInvocation(name, args, platform = process.platform, nodePath = process.execPath, environment = process.env) {
+  if (platform !== "win32") return { command: name, args };
+  // Node cannot execute .cmd directly with shell:false. Invoke npm's JS entry
+  // with the managed Node runtime, preserving paths/arguments without a shell.
+  const npmEntry = environment.npm_execpath;
+  const entry = npmEntry && /(?:npm|npx)-cli\.js$/i.test(npmEntry)
+    ? path.win32.join(path.win32.dirname(npmEntry), `${name}-cli.js`)
+    : path.win32.join(path.win32.dirname(nodePath), "node_modules", "npm", "bin", `${name}-cli.js`);
+  return { command: nodePath, args: [entry, ...args] };
+}
+
+function runPackageManager(name, args, options) {
+  const invocation = packageManagerInvocation(name, args);
+  return spawnSync(invocation.command, invocation.args, options);
 }
 
 function installRuntimeDependencies(directory) {
-  const result = spawnSync(npmCommand(), ["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: directory, stdio: "inherit" });
+  const result = runPackageManager("npm", ["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: directory, stdio: "inherit" });
   if (result.error || result.status !== 0) throw new Error("could not prepare the WorkBuddy connector dependencies; verify Node.js and network access");
 }
 
@@ -239,7 +276,10 @@ async function installPackage(installDir) {
     installRuntimeDependencies(staging);
     await stat(path.join(staging, "node_modules", "@modelcontextprotocol", "sdk", "package.json"));
     try { await stat(installDir); await rename(installDir, backup); } catch (error) { if (error.code !== "ENOENT") throw error; }
-    await rename(staging, installDir);
+    try { await rename(staging, installDir); } catch (error) {
+      try { await rename(backup, installDir); } catch (restore) { if (restore.code !== "ENOENT") throw restore; }
+      throw error;
+    }
   } finally {
     await rm(stagingRoot, { recursive: true, force: true });
   }
@@ -281,7 +321,7 @@ async function configureServerDuringInstall(server) {
 
 async function install(argumentsList) {
   if (argumentsList.includes("--help") || argumentsList.includes("-h")) {
-    process.stdout.write("Usage: npx github:lanjing-digital/laps-cli install [skills...] [--server URL] [--bin-dir DIR] [--install-dir DIR] [--skills-dir DIR] [--no-skills]\n");
+    process.stdout.write("Usage: npx --yes @lanjing-digital/laps-cli@latest install [skills...] [--non-interactive] [--server URL | --default-server URL] [--bin-dir DIR] [--install-dir DIR] [--skills-dir DIR] [--no-skills] [--managed]\n--managed keeps installation in the package manager's directory (for WorkBuddy). No login or stdin prompt occurs during installation.\n");
     return 0;
   }
   const options = parseInstallArgs(argumentsList);
@@ -289,17 +329,29 @@ async function install(argumentsList) {
   const installDir = path.resolve(options.installDir || defaultInstallDir(target));
   const binDir = path.resolve(options.binDir || defaultBinDir(installDir, target));
   const skillsDir = path.resolve(options.skillsDir || defaultSkillsDir());
+  if (options.managed) {
+    await ensureBinary();
+    if (!options.noSkills) for (const skill of options.skills) await installSkill(skill, skillsDir, path.join(packageRoot, "skills"));
+    await writeFile(path.join(packageRoot, installationFile), `${JSON.stringify({ method: "npm-global", source: "npm", skillsDir, skills: options.noSkills ? [] : options.skills })}\n`, { mode: 0o600 });
+    await configureServerDuringInstall(options.server || (!await configuredServerURL() ? options.defaultServer : undefined));
+    process.stdout.write(`LAPS CLI ${cliVersion} ready in managed runtime.\n`);
+    return 0;
+  }
+  // Verify the download before replacing an existing working installation.
+  const verifiedBinary = await ensureBinary();
   const installedPackage = await installPackage(installDir);
+  await mkdir(path.dirname(cachePath(target, installedPackage)), { recursive: true });
+  if (verifiedBinary !== cachePath(target, installedPackage)) await cp(verifiedBinary, cachePath(target, installedPackage));
   await ensureBinary(installedPackage);
   const launcherPath = await writeLauncher(installedPackage, binDir, target, "laps-cli", "laps-cli.js");
   const mcpLauncherPath = await writeLauncher(installedPackage, binDir, target, "laps-mcp", "laps-mcp.js");
-  await writeFile(path.join(installedPackage, installationFile), `${JSON.stringify({ binDir, skillsDir, source: options.source }, null, 2)}\n`, { mode: 0o600 });
+  await writeFile(path.join(installedPackage, installationFile), `${JSON.stringify({ method: "standalone", binDir, skillsDir, source: options.source, skills: options.noSkills ? [] : options.skills }, null, 2)}\n`, { mode: 0o600 });
   process.stdout.write(`installed laps-cli launcher to ${launcherPath}\n`);
   process.stdout.write(`installed WorkBuddy connector to ${mcpLauncherPath}\n`);
   if (!options.noSkills) {
     for (const skill of options.skills) await installSkill(skill, skillsDir, path.join(installedPackage, "skills"));
   }
-  await configureServerDuringInstall(options.server);
+  await configureServerDuringInstall(options.server || (!await configuredServerURL() ? options.defaultServer : undefined));
   return 0;
 }
 
@@ -336,48 +388,66 @@ async function runConfig(argumentsList) {
 
 export async function installationSettings() {
   const target = resolveTarget();
-  const installDir = path.resolve(process.env.LAPS_CLI_INSTALL_DIR || defaultInstallDir(target));
+  const installDir = path.resolve(process.env.LAPS_CLI_INSTALL_DIR || packageRoot);
   const recorded = await readJSON(path.join(installDir, installationFile));
   return {
     installDir,
     binDir: path.resolve(recorded.binDir || defaultBinDir(installDir, target)),
     skillsDir: path.resolve(recorded.skillsDir || defaultSkillsDir()),
+    method: recorded.method || (process.env.LAPS_CLI_INSTALL_DIR ? "standalone" : "npm-global"),
+    skills: recorded.skills,
   };
 }
 
-function npxCommand(target = resolveTarget()) {
-  return target.goos === "windows" ? "npx.cmd" : "npx";
+function updateSpec(source, version) {
+  return source === "npm" ? `@lanjing-digital/laps-cli@${version || "latest"}` : `github:${releaseRepository}${version ? `#v${version}` : ""}`;
 }
 
-function updateSpec(source) {
-  return source === "npm" ? "@lanjing-digital/laps-cli@latest" : `github:${releaseRepository}`;
-}
-
-export function updateInstallArguments(source, settings) {
-  return ["--yes", "--force", updateSpec(source), "install", "--install-dir", settings.installDir, "--bin-dir", settings.binDir, "--skills-dir", settings.skillsDir, "--source", source];
+export function updateInstallArguments(source, settings, version) {
+  const selection = settings.skills?.length === 0 ? ["--no-skills"] : settings.skills || [];
+  return ["--yes", "--force", updateSpec(source, version), "install", "--non-interactive", "--install-dir", settings.installDir, "--bin-dir", settings.binDir, "--skills-dir", settings.skillsDir, "--source", source, ...selection];
 }
 
 async function runUpdate(argumentsList) {
   if (argumentsList.includes("--help") || argumentsList.includes("-h")) {
-    process.stdout.write("Usage: laps-cli update [--source auto|github|npm]\n");
+    process.stdout.write("Usage: laps-cli update [--check] [--json] [--force] [--source auto|github|npm]\n--check only queries versions; --force reinstalls the selected release.\n");
     return 0;
   }
-  const { source } = parseUpdateArgs(argumentsList);
+  const { source, check, json, force } = parseUpdateArgs(argumentsList);
   const settings = await installationSettings();
-  const sources = source === "auto" ? ["npm", "github"] : [source];
-  for (const candidate of sources) {
-    if (source === "auto") process.stdout.write(`checking ${candidate} update source...\n`);
-    const result = spawnSync(npxCommand(), updateInstallArguments(candidate, settings), {
-      stdio: source === "auto" && candidate === "npm" ? "pipe" : "inherit",
-    });
-    if (!result.error && result.status === 0) {
-      process.stdout.write(`laps-cli updated from ${candidate}.\n`);
-      return 0;
-    }
-    if (source !== "auto") throw new Error(`${candidate} update failed; verify Node.js, network access, and the selected source`);
-    process.stdout.write(`${candidate} source is unavailable; trying the next source.\n`);
+  const binary = await ensureBinary();
+  const probe = spawnSync(binary, ["update", "--check", "--json", "--source", source], {
+    encoding: "utf8", env: { ...process.env, LAPS_SKILLS_DIR: process.env.LAPS_SKILLS_DIR || settings.skillsDir },
+  });
+  if (probe.error || probe.status !== 0) throw new Error(`version check failed: ${probe.stdout || probe.stderr || probe.error?.message}`);
+  const report = JSON.parse(probe.stdout);
+  if (check) {
+    process.stdout.write(json ? `${JSON.stringify(report, null, 2)}\n` : `CLI ${report.current_version}; latest ${report.latest_version}; Skills: ${report.skills.status}\n${Object.values(report._notice || {}).map(n => n.message).join("\n")}\n`);
+    return 0;
   }
-  throw new Error("no update source succeeded; run `laps-cli update --source github` after checking network access");
+  const log = json ? process.stderr : process.stdout;
+  if (!report.update_available && !force) {
+    const installed = settings.skills || report.skills.versions.map(s => s.name);
+    for (const skill of installed) await installSkill(skill, settings.skillsDir, path.join(packageRoot, "skills"), cliVersion, log);
+    const bundleStale = report.skills.bundle_version && report.skills.status === "out_of_sync";
+    process.stdout.write(json ? `${JSON.stringify({ success: true, current_version: cliVersion, updated: false, skills_action: bundleStale ? "connector_update_required" : "synced", _notice: report._notice })}\n` : `CLI ${cliVersion} 已是最新版本，已同步已安装的 Skills。${bundleStale ? "请更新 WorkBuddy 中的 LAPS 连接器以同步其 Skills。" : ""}\n`);
+    return 0;
+  }
+  const candidate = report.source;
+  log.write(`Updating ${cliVersion} → ${report.latest_version} (${candidate})...\n`);
+  let result;
+  if (settings.method === "npm-global") {
+    result = runPackageManager("npm", ["install", "-g", updateSpec(candidate, report.latest_version), "--ignore-scripts", "--no-audit", "--no-fund"], { stdio: json ? ["ignore", 2, 2] : "inherit" });
+    if (!result.error && result.status === 0) {
+      const selection = settings.skills?.length === 0 ? ["--no-skills"] : settings.skills || [];
+      result = spawnSync(process.execPath, [path.join(packageRoot, "npm/bin/laps-cli.js"), "install", "--managed", "--non-interactive", "--skills-dir", settings.skillsDir, ...selection], { stdio: json ? ["ignore", 2, 2] : "inherit" });
+    }
+  } else {
+    result = runPackageManager("npx", updateInstallArguments(candidate, settings, report.latest_version), { stdio: json ? ["ignore", 2, 2] : "inherit" });
+  }
+  if (result.error || result.status !== 0) throw new Error(`${candidate} update failed; check the installer output above`);
+  process.stdout.write(json ? `${JSON.stringify({ success: true, previous_version: cliVersion, current_version: report.latest_version, updated: true, source: candidate })}\n` : `laps-cli updated to ${report.latest_version} from ${candidate}.\n`);
+  return 0;
 }
 
 function findBaseURLOption(args) {
@@ -391,8 +461,18 @@ function isHelpInvocation(args) {
   return args.length === 0 || args.includes("--help") || args.includes("-h") || args[0] === "help";
 }
 
+function refreshVersionCache(binary, args) {
+  if (isHelpInvocation(args) || (args[0] === "auth" && args[1] === "status")) return;
+  if (["CI", "BUILD_NUMBER", "RUN_ID", "LAPS_CLI_NO_UPDATE_NOTIFIER"].some(key => process.env[key])) return;
+  // Detached so even a fast command can populate the daily cache without waiting.
+  const worker = spawn(binary, ["__refresh-update-cache"], { detached: true, stdio: "ignore", windowsHide: true });
+  worker.on("error", () => {}); // An advisory lookup must not fail a business command.
+  worker.unref();
+}
+
 async function requireConfiguredServer(args) {
   if (isHelpInvocation(args)) return args;
+  if (args[0] === "auth" && args[1] === "logout") return args;
   const supplied = findBaseURLOption(args);
   if (supplied) return args;
   const baseURL = await configuredServerURL();
@@ -403,13 +483,20 @@ async function requireConfiguredServer(args) {
 }
 
 export async function run(argumentsList) {
+  if (["--version", "-v", "version"].includes(argumentsList[0])) {
+    if (argumentsList.length > 1 && !(argumentsList.length === 2 && argumentsList[1] === "--json")) throw new Error("Usage: laps-cli version [--json]");
+    process.stdout.write(argumentsList.includes("--json") ? `${JSON.stringify({ version: cliVersion })}\n` : `${cliVersion}\n`);
+    return 0;
+  }
   if (argumentsList[0] === "install") return install(argumentsList.slice(1));
   if (argumentsList[0] === "install-skills") return installSkills(argumentsList.slice(1));
   if (argumentsList[0] === "update") return runUpdate(argumentsList.slice(1));
   if (argumentsList[0] === "config") return runConfig(argumentsList.slice(1));
   const binary = await ensureBinary();
   const commandArgs = await requireConfiguredServer(argumentsList);
-  const result = spawnSync(binary, commandArgs, { stdio: "inherit" });
+  const settings = await installationSettings();
+  refreshVersionCache(binary, argumentsList);
+  const result = spawnSync(binary, commandArgs, { stdio: "inherit", env: { ...process.env, LAPS_CLI_CACHE_REFRESH_STARTED: "1", LAPS_SKILLS_DIR: process.env.LAPS_SKILLS_DIR || settings.skillsDir } });
   if (result.error) throw result.error;
   return result.status ?? 1;
 }

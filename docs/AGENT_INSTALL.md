@@ -20,7 +20,7 @@ Do not guess a production address or silently use `127.0.0.1`. If the address is
 The public GitHub form is available immediately and is the canonical bootstrap path:
 
 ```sh
-npx --yes github:lanjing-digital/laps-cli install --server https://aps.example.com
+npx --yes @lanjing-digital/laps-cli@latest install --non-interactive --server https://aps.example.com
 ```
 
 It installs the self-updating `laps-cli` and `laps-mcp` launchers, eight domain skills, and the WorkBuddy connector skill. By default, skills go to `~/.agents/skills`. To install for Codex instead:
@@ -93,7 +93,13 @@ The updater also supports the npm distribution once the scoped package is publis
 laps-cli update --source npm
 ```
 
-`laps-cli update` uses `auto`: it tries npm first, then GitHub. Updating replaces the launcher package, retrieves the matching platform binary, re-installs the bundled skills, and preserves the configured server address.
+`laps-cli update` uses `auto`: it checks npm first, then GitHub. Updating installs the exact checked release and synchronizes selected skills. Installation paths, server address, credentials and `--no-skills` are preserved. `laps-cli update --check --json` checks without installing or writing state; `--force` explicitly reinstalls. Ordinary commands display available updates and skill version drift through stderr and JSON `_notice` fields.
+
+## WorkBuddy CLI connector
+
+Use the generated CLI connector directory from `scripts/build-workbuddy-connector.mjs` when choosing WorkBuddy's CLI + Skill integration. WorkBuddy provides Node.js and manages its npm prefix. Its init uses the same package's `install --managed --non-interactive --no-skills --default-server https://lanjingshuzi.cn:3000`; no Go or user-installed Node is needed. The default server is only saved when no server is configured. For a user-selected server run `laps-cli config set-server --url URL`, then reconnect.
+
+The auth entry is `laps-cli auth login --no-browser` with `authWaitForExit: true`; the status entry is `laps-cli auth status --local`, which only reads persisted renewable-session state; unAuth is `laps-cli auth logout`. Status does not refresh credentials or contact the server; the next business request validates remote authorization. Connector-packaged skills are versioned together, so a bundle/CLI mismatch requires updating the WorkBuddy connector, not only the npm package.
 
 ## Safety rules for agents
 

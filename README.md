@@ -19,7 +19,7 @@ The package includes eight focused business skills and a separate WorkBuddy conn
 Install the native CLI, WorkBuddy connector, and all skills for the current platform from the public GitHub repository. Provide the remote APS server address during installation:
 
 ```sh
-npx --yes github:lanjing-digital/laps-cli install --server https://aps.example.com
+npx --yes @lanjing-digital/laps-cli@latest install --non-interactive --server https://aps.example.com
 ```
 
 Use an IP address when appropriate, for example `http://192.168.1.20:3000`. The command installs a self-updating launcher to `~/.local/bin` on macOS/Linux and to the per-user local application directory on Windows. It installs skills to `~/.agents/skills` by default. Neither location is added to `PATH` automatically.
@@ -81,16 +81,26 @@ For schedule queries and trial schedules, the connector uses the local LAPS inst
 laps-cli update --source github
 laps-cli update --source npm
 laps-cli update
+laps-cli update --check --json
+laps-cli version --json
 ```
 
-`github` updates from this public repository. `npm` uses the public `@lanjing-digital/laps-cli` package once it is published. The default `auto` mode tries npm first and then falls back to GitHub.
+`auto` checks npm first and uses GitHub if npm version discovery fails. The selected exact release is installed; `--force` reinstalls even at the current version. `--check` only queries versions and local skill markers, without installing or writing configuration. Updates preserve server settings, credentials, installation locations and selected skills (including `--no-skills`). An npm global/WorkBuddy-managed installation stays under the package manager's prefix.
+
+Like [larksuite/cli](https://github.com/larksuite/cli/tree/main/internal/update), ordinary commands consult a 24-hour version cache and refresh it in the background. Warnings appear on stderr and under `_notice.update` / `_notice.skills` in JSON responses. Artifact bytes are unchanged. Skill installs record their release version; legacy, unknown or mismatched versions prompt synchronization. CI skips automatic notices; `LAPS_CLI_NO_UPDATE_NOTIFIER` and `LAPS_CLI_NO_SKILLS_NOTIFIER` opt out separately. Explicit `update --check` remains available.
+
+## WorkBuddy CLI + Skill distribution
+
+This is a separate connector option from the MCP configuration above. Generate a directory with `connector-meta.json`, `cli.json`, icon and eight source-derived business skills:
+
+```sh
+node scripts/build-workbuddy-connector.mjs ./dist/laps-workbuddy-cli
+```
+
+Optional third argument: an HTTPS server origin. The default is `https://lanjingshuzi.cn:3000` (general demo). Existing configured addresses are preserved. End users can change it with `laps-cli config set-server --url URL` and reconnect.
+
+WorkBuddy supplies Node.js 20. Its init command installs the same npm package and uses `install --managed --non-interactive --no-skills` to prepare the checksum-verified binary in the managed package directory. Credentials remain outside that directory. `auth`, `status` and `unAuth` config entries invoke existing `auth login --no-browser`, `auth status --local` and `auth logout`; no top-level aliases are added. `authWaitForExit: true` preserves the OAuth callback process. Local status reports a persisted renewable session only; it does not prove remote authorization has not been revoked.
 
 ## Release process
 
-Push a version tag such as `v0.1.0`. GitHub Actions runs Go and launcher tests, cross-compiles the six supported platform targets, and publishes checksum-protected release assets. After the release completes, publish the npm package:
-
-```sh
-npm publish --access public
-```
-
-The package version and Git tag must match. Configure npm publishing credentials separately; this repository deliberately does not store registry tokens.
+Canonical sources live in the main APS repository's `cli/`, including the npm launcher and release workflow. Synchronize that directory's declared distribution files into the public repository. `VERSION`, package.json, package-lock.json and the release tag must match. GitHub Actions tests, builds six binaries, publishes the checksum-protected Release and then publishes npm through the existing CI secret. Rebuild and resubmit the WorkBuddy connector for each release so its skills and install pin remain aligned.

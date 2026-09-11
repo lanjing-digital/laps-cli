@@ -6,6 +6,8 @@ try {
   const exitCode = await run(process.argv.slice(2));
   if (Number.isInteger(exitCode)) process.exitCode = exitCode;
 } catch (error) {
-  process.stderr.write(`laps-cli: ${error.message}\n`);
+  if (process.argv.includes("--json")) {
+    process.stdout.write(`${JSON.stringify({ success: false, error: { code: "CLI_ERROR", message: error.message } })}\n`);
+  } else process.stderr.write(`laps-cli: ${error.message}\n`);
   process.exitCode = 1;
 }

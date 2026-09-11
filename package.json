@@ -1,6 +1,6 @@
 {
   "name": "@lanjing-digital/laps-cli",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "Cross-platform launcher and skill installer for LAPS CLI",
   "type": "module",
   "bin": {
@@ -13,9 +13,11 @@
     "npm/mcp",
     "npm/test",
     "docs",
+    "scripts",
     "skills",
     "README.md",
-    "package.json"
+    "package.json",
+    "VERSION"
   ],
   "engines": {
     "node": ">=18"
@@ -30,7 +32,8 @@
   "homepage": "https://github.com/lanjing-digital/laps-cli#readme",
   "scripts": {
     "test": "node --test npm/test/*.test.mjs",
-    "pack:check": "npm pack --dry-run"
+    "pack:check": "npm pack --dry-run",
+    "connector:build": "node scripts/build-workbuddy-connector.mjs"
   },
   "publishConfig": {
     "access": "public"

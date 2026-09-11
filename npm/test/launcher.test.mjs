@@ -17,10 +17,10 @@ test("rejects unsupported platform combinations", () => {
 
 test("install options preserve paths, source, and server configuration", () => {
   assert.deepEqual(parseInstallArgs(["laps-orders", "--bin-dir", "/tmp/bin", "--install-dir", "/tmp/laps", "--skills-dir", "/tmp/skills", "--server", "https://aps.example.com"]), {
-    binDir: "/tmp/bin", installDir: "/tmp/laps", skillsDir: "/tmp/skills", server: "https://aps.example.com", source: "github", noSkills: false, skills: ["laps-orders"],
+    binDir: "/tmp/bin", installDir: "/tmp/laps", skillsDir: "/tmp/skills", server: "https://aps.example.com", source: "github", noSkills: false, skills: ["laps-orders"], defaultServer: undefined, nonInteractive: false, managed: false,
   });
   assert.deepEqual(parseInstallArgs(["--no-skills"]), {
-    binDir: undefined, installDir: undefined, skillsDir: undefined, server: undefined, source: "github", noSkills: true, skills: allSkills,
+    binDir: undefined, installDir: undefined, skillsDir: undefined, server: undefined, source: "github", noSkills: true, skills: allSkills, defaultServer: undefined, nonInteractive: false, managed: false,
   });
   assert.throws(() => parseInstallArgs(["unknown-skill"]), /unknown skill/);
 });
@@ -29,8 +29,8 @@ test("normalizes configured APS server URLs and validates update sources", () =>
   assert.equal(normalizeServerURL("https://aps.example.com/"), "https://aps.example.com");
   assert.equal(normalizeServerURL("http://192.168.1.20:3000"), "http://192.168.1.20:3000");
   assert.throws(() => normalizeServerURL("aps.example.com"), /http:\/\//);
-  assert.deepEqual(parseUpdateArgs([]), { source: "auto" });
-  assert.deepEqual(parseUpdateArgs(["--source", "github"]), { source: "github" });
+  assert.deepEqual(parseUpdateArgs([]), { source: "auto", check: false, json: false, force: false });
+  assert.deepEqual(parseUpdateArgs(["--source", "github"]), { source: "github", check: false, json: false, force: false });
   assert.throws(() => parseUpdateArgs(["--source", "invalid"]), /auto, npm, or github/);
 });
 
@@ -40,7 +40,7 @@ test("GitHub updates bypass stale npx cache while preserving installation locati
     binDir: "/tmp/bin",
     skillsDir: "/tmp/skills",
   }), [
-    "--yes", "--force", "github:lanjing-digital/laps-cli", "install",
+    "--yes", "--force", "github:lanjing-digital/laps-cli", "install", "--non-interactive",
     "--install-dir", "/tmp/laps-cli", "--bin-dir", "/tmp/bin", "--skills-dir", "/tmp/skills", "--source", "github",
   ]);
 });

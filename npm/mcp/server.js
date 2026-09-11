@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { connectionStatus, executeDomain } from "./business.js";
 import { domainNames, operationNames } from "./operations.js";
+import { cliVersion } from "../lib/launcher.js";
 
 const scalar = z.union([z.string(), z.number(), z.boolean()]);
 const inputShape = (domain) => ({
@@ -74,7 +75,7 @@ function registerDomainTool(server, domain) {
   });
 }
 
-export function createServer(version = "0.1.14") {
+export function createServer(version = cliVersion) {
   const server = new McpServer({ name: "laps-mcp", version });
   server.registerTool("laps_connection", {
     title: "LAPS 连接状态",

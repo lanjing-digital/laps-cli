@@ -69,6 +69,13 @@ func Run(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 
 	switch args[0] {
+	case "__refresh-update-cache":
+		newChecker().Refresh(context.Background())
+		return ExitOK
+	case "version", "--version", "-v":
+		return runVersion(args[1:], stdout)
+	case "update":
+		return runUpdateCheck(args[1:], stdout)
 	case "auth":
 		return runAuth(args[1:], stdout, stderr)
 	case "auto-schedule":
@@ -316,6 +323,7 @@ func runAuthStatus(args []string, stdout io.Writer) int {
 	fs := flag.NewFlagSet("auth status", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	baseURL := fs.String("base-url", envOrDefault(envBaseURL, client.DefaultBaseURL), "scheduling API base URL")
+	local := fs.Bool("local", false, "read persisted session only; do not refresh or contact the server")
 	if code := parseNoArgs(fs, args, stdout, "auth status"); code != ExitOK {
 		return code
 	}
@@ -323,9 +331,28 @@ func runAuthStatus(args []string, stdout io.Writer) int {
 	if err != nil {
 		return writeAuthError(stdout, "auth status", err)
 	}
-	manager := &cliAuth.Manager{BaseURL: *baseURL, Store: store}
-	apiClient := client.NewWithTokenProvider(*baseURL, manager)
-	response, err := apiClient.Get(context.Background(), "/api/laps/me", nil)
+	credentials, err := store.Load()
+	if err != nil {
+		return writeAuthError(stdout, "auth status", err)
+	}
+	if !sameServer(credentials.BaseURL, *baseURL) {
+		return writeAuthError(stdout, "auth status", fmt.Errorf("credentials belong to a different APS server; run laps-cli auth login"))
+	}
+	now := time.Now()
+	if !now.Before(credentials.RefreshTokenExpiresAt) {
+		return writeAuthError(stdout, "auth status", fmt.Errorf("login expired; run laps-cli auth login"))
+	}
+	if *local {
+		writeJSONMap(stdout, map[string]any{"success": true, "authenticated": true, "command": "auth status", "checked": "local", "refreshRequired": !now.Before(credentials.ExpiresAt), "user": credentials.User})
+		return ExitOK
+	}
+	if !now.Before(credentials.ExpiresAt) {
+		return writeAuthError(stdout, "auth status", fmt.Errorf("access token expired; use auth status --local to check the renewable session, or auth login to reauthenticate"))
+	}
+	apiClient := client.New(*baseURL, credentials.AccessToken)
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	response, err := apiClient.Get(ctx, "/api/laps/me", nil)
 	if err != nil {
 		return writeAPIError(stdout, err, "auth status", nil, nil)
 	}
@@ -914,6 +941,8 @@ func exitCodeFor(code string) int {
 
 func writeUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "  laps-cli version [--json]")
+	fmt.Fprintln(w, "  laps-cli update --check [--json] [--source auto|npm|github]")
 	fmt.Fprintln(w, "  laps-cli auth login [--base-url URL]")
 	fmt.Fprintln(w, "  laps-cli auth status [--base-url URL]")
 	fmt.Fprintln(w, "  laps-cli auth logout")
@@ -954,7 +983,8 @@ func writeAuthLoginUsage(w io.Writer) {
 
 func writeAuthStatusUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  laps-cli auth status [--base-url URL]")
+	fmt.Fprintln(w, "  laps-cli auth status [--base-url URL] [--local]")
+	fmt.Fprintln(w, "  Read-only: does not refresh or modify credentials. --local checks the persisted renewable session without a network request.")
 }
 
 func writeAuthLogoutUsage(w io.Writer) {
@@ -1113,6 +1143,7 @@ func writeAuthSuccess(w io.Writer, command string, credentials cliAuth.Credentia
 }
 
 func writeJSONMap(w io.Writer, payload map[string]any) {
+	addNotices(w, payload)
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	_ = encoder.Encode(payload)
@@ -1161,9 +1192,7 @@ func writeError(w io.Writer, payload outputPayload) {
 
 func writeSuccess(w io.Writer, response map[string]any, metadata map[string]any) {
 	payload := mergePayload(response, metadata)
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ")
-	_ = encoder.Encode(payload)
+	writeJSONMap(w, payload)
 }
 
 func emitResponse(w io.Writer, response map[string]any, metadata map[string]any, view renderFlags) int {
@@ -1174,9 +1203,7 @@ func emitResponse(w io.Writer, response map[string]any, metadata map[string]any,
 	payload := mergePayload(response, metadata)
 	switch format {
 	case "json":
-		encoder := json.NewEncoder(w)
-		encoder.SetIndent("", "  ")
-		_ = encoder.Encode(payload)
+		writeJSONMap(w, payload)
 	case "timeline":
 		return writeRenderedOutput(w, render.Timeline(payload), *view.output)
 	case "svg":
@@ -1286,7 +1313,8 @@ func visualRecordKey(record map[string]any) string {
 }
 
 func writeJSON(w io.Writer, payload outputPayload) {
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ")
-	_ = encoder.Encode(payload)
+	raw, _ := json.Marshal(payload)
+	var object map[string]any
+	_ = json.Unmarshal(raw, &object)
+	writeJSONMap(w, object)
 }

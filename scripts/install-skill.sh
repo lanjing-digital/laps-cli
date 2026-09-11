@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLI_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SOURCE_ROOT="${CLI_DIR}/skills"
+RELEASE_VERSION="$(tr -d '\r\n' < "${CLI_DIR}/VERSION")"
 TARGET_ROOT="${LAPS_SKILLS_DIR:-${HOME}/.agents/skills}"
 ALL_SKILLS=(
   laps-cli-auth
@@ -49,6 +50,7 @@ for skill in "${skills[@]}"; do
   staging_root="$(mktemp -d "${TARGET_ROOT}/.laps-skill-install.XXXXXX")"
   staging_dir="${staging_root}/${skill}"
   cp -R "${source_dir}" "${staging_dir}"
+  printf '{"version":"%s"}\n' "${RELEASE_VERSION}" > "${staging_dir}/.laps-version.json"
   if [[ ! -f "${staging_dir}/SKILL.md" || ! -f "${staging_dir}/agents/openai.yaml" ]]; then
     rm -rf "${staging_root}"
     echo "staged skill validation failed: ${skill}" >&2
