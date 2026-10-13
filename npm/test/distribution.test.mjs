@@ -11,7 +11,7 @@ import { buildConnector, connectorConfig, connectorSkills } from "../../scripts/
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 
-test("release version and all nine source skills match the installer", async () => {
+test("release version and all source skills match the installer", async () => {
   assert.equal((await readFile(path.join(root,"VERSION"),"utf8")).trim(),cliVersion);
   const dirs=await readdir(path.join(root,"skills"),{withFileTypes:true});
   assert.deepEqual(allSkills.toSorted(),dirs.filter(d=>d.isDirectory()).map(d=>d.name).toSorted());
@@ -73,6 +73,21 @@ test("skill install records its version and only replaces the selected skill", a
   } finally { await rm(directory,{recursive:true,force:true}); }
 });
 
+test("new personal and business skills stage through the existing installer", async () => {
+  const directory=await mkdtemp(path.join(os.tmpdir(),"laps-personal-skills-"));
+  const selected=["laps-personal-memory","laps-personal-workbench","laps-production-planning","laps-warehouse-inventory","laps-production-execution"];
+  try {
+    for(const name of selected){
+      await installSkill(name,directory,path.join(root,"skills"),cliVersion,{write(){}});
+      for(const file of ["SKILL.md","agents/openai.yaml","references/commands.md"]){
+        assert.equal(await readFile(path.join(directory,name,file),"utf8"),await readFile(path.join(root,"skills",name,file),"utf8"));
+      }
+      assert.equal(JSON.parse(await readFile(path.join(directory,name,".laps-version.json"),"utf8")).version,cliVersion);
+    }
+    assert.deepEqual((await readdir(directory)).sort(),selected.sort());
+  } finally {await rm(directory,{recursive:true,force:true});}
+});
+
 test("WorkBuddy CLI bundle uses the same published package and exact source skills", async () => {
   const directory=await mkdtemp(path.join(os.tmpdir(),"laps-connector-test-"));
   try {
@@ -89,7 +104,7 @@ test("WorkBuddy CLI bundle uses the same published package and exact source skil
     }
     assert.match('{"authenticated": true}',new RegExp(config.statusMatch));
     assert.doesNotMatch('{"authenticated": false}',new RegExp(config.statusMatch));
-    assert.equal(connectorSkills.length,8);
+    assert.equal(connectorSkills.length,allSkills.length - 1);
     for (const name of connectorSkills) for (const file of ["SKILL.md","references/commands.md"]) {
       assert.equal(await readFile(path.join(destination,"skills",name,file),"utf8"),await readFile(path.join(root,"skills",name,file),"utf8"));
     }

@@ -23,7 +23,7 @@ The public GitHub form is available immediately and is the canonical bootstrap p
 npx --yes @lanjing-digital/laps-cli@latest install --non-interactive --server https://aps.example.com
 ```
 
-It installs the self-updating `laps-cli` and `laps-mcp` launchers, eight domain skills, and the WorkBuddy connector skill. By default, skills go to `~/.agents/skills`. To install for Codex instead:
+It installs the self-updating `laps-cli` and `laps-mcp` launchers and the selected release's domain skills and WorkBuddy connector skill. New personal-context commands in the local source require a matching future release, not the old published binary. By default, skills go to `~/.agents/skills`. To install for Codex instead:
 
 ```sh
 npx --yes github:lanjing-digital/laps-cli install --server https://aps.example.com --skills-dir "$HOME/.codex/skills"

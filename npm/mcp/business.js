@@ -14,6 +14,7 @@ function recordCount(data) {
 
 function operationLabel(domain, operation) {
   const labels = {
+    personal: "个人记忆与关注", conversations: "本人对话历史", procurement: "预计到货", production_planning: "生产计划与备货", warehouse_inventory: "仓库与库存", production_execution: "生产进度与报工",
     orders: "生产订单", material_master: "物料与 BOM", material_readiness: "物料齐套", scheduling: "生产排程", capacity: "产能配置", master_data: "工厂与基础资料", scheduling_policy: "排产策略",
   };
   if (operation.includes("preview")) return `${labels[domain]}试算`;

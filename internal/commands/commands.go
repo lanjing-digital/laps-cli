@@ -69,6 +69,8 @@ func Run(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 
 	switch args[0] {
+	case "personal", "planning", "warehouse", "execution", "procurement", "conversations":
+		return runServiceCommand(args, stdout)
 	case "__refresh-update-cache":
 		newChecker().Refresh(context.Background())
 		return ExitOK
@@ -966,6 +968,7 @@ func writeUsage(w io.Writer) {
 	fmt.Fprintln(w, "  laps-cli move schedule apply --schedule-id ID --to-team-id ID")
 	fmt.Fprintln(w, "  laps-cli scheduling-policy list|get|create|update|delete|clone|validate|publish|runs")
 	writeDomainUsage(w)
+	serviceUsage(w, "")
 }
 
 func writeAuthUsage(w io.Writer) {

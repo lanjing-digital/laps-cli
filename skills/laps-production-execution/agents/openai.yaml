@@ -1,0 +1,4 @@
+interface:
+  display_name: "生产进度与动态重排"
+  short_description: "复用当前用户登录与正式业务能力，查询核对后确认保存并说明实际处理结果"
+  default_prompt: "Use $laps-production-execution to handle this task with the current user's permissions and confirm changes before saving."

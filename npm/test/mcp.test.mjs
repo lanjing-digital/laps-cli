@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { spawn } from "node:child_process";
 import { executeDomain } from "../mcp/business.js";
-import { prepareInvocation } from "../mcp/operations.js";
+import { prepareInvocation, domainNames } from "../mcp/operations.js";
 import { installWorkBuddyConfig } from "../mcp/workbuddy.js";
 
 test("MCP operation mapping only accepts named business operations and settings", async () => {
@@ -15,6 +15,23 @@ test("MCP operation mapping only accepts named business operations and settings"
   await assert.rejects(() => prepareInvocation("orders", { operation: "list", options: { "base-url": "https://unexpected.example" } }), /不支持的设置项/);
   await assert.rejects(() => prepareInvocation("orders", { operation: "import-apply", payload: {}, confirm: false }), /取得确认/);
   await assert.rejects(() => prepareInvocation("orders", { operation: "delete", id: "order_1", confirm: true }), /删除前需要再次确认/);
+});
+
+test("personal MCP mapping preserves consent, exact revision and explicit false", async () => {
+  const read = await prepareInvocation("personal", { operation: "preferences-list" });
+  assert.deepEqual(read.args, ["personal", "preferences", "list"]);
+  await read.cleanup();
+  await assert.rejects(() => prepareInvocation("personal", { operation: "sync-apply", payload: {}, previewToken: "proof" }), /取得确认/);
+  const apply = await prepareInvocation("personal", { operation: "sync-apply", payload: { schemaVersion: 1 }, previewToken: "proof", confirm: true });
+  assert.deepEqual(apply.args.slice(0, 6), ["personal", "sync", "apply", "--confirm", "--preview-token", "proof"]);
+  await apply.cleanup();
+  const settings = await prepareInvocation("personal", { operation: "learning-set", confirm: true, options: { enabled: false } });
+  assert.deepEqual(settings.args, ["personal", "learning", "set", "--confirm", "--enabled", "false"]);
+  await settings.cleanup();
+  const remove = await prepareInvocation("personal", { operation: "memories-delete", id: "mine", confirm: true, yes: true, options: { version: 3 } });
+  assert.deepEqual(remove.args, ["personal", "memories", "delete", "--confirm", "--yes", "--id", "mine", "--version", "3"]);
+  await remove.cleanup();
+  await assert.rejects(() => prepareInvocation("personal", { operation: "memories-list", options: { "user-id": "other" } }), /不支持的设置项/);
 });
 
 test("MCP creates and removes a private JSON payload file", async () => {
@@ -162,7 +179,7 @@ test("MCP stdio server completes initialize and exposes all fixed tools", async 
   child.kill();
   const messages = output.trim().split(/\n/).filter(Boolean).map((line) => JSON.parse(line));
   const tools = messages.find((message) => message.id === 2)?.result?.tools || [];
-  assert.deepEqual(tools.map((tool) => tool.name), ["laps_connection", "laps_orders", "laps_material_master", "laps_material_readiness", "laps_scheduling", "laps_capacity", "laps_master_data", "laps_scheduling_policy"]);
+  assert.deepEqual(tools.map((tool) => tool.name), ["laps_connection", ...domainNames.map(domain => `laps_${domain}`)]);
   const mutation = messages.find((message) => message.id === 3)?.result;
   assert.equal(mutation.isError, true);
   assert.match(mutation.content[0].text, /取得确认/);

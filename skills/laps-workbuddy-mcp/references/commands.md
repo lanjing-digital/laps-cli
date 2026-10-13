@@ -20,6 +20,6 @@ laps-cli update --source github
 laps-cli update --source npm
 ```
 
-连接器必须与 `laps-cli` 使用同一个操作系统账号和同一份 APS 登录状态。确认环境时调用 `laps_connection`；业务操作使用固定的 `laps_orders`、`laps_material_master`、`laps_material_readiness`、`laps_scheduling`、`laps_capacity`、`laps_master_data`、`laps_scheduling_policy` 工具。
+连接器必须与 `laps-cli` 使用同一个操作系统账号和同一份 APS 登录状态。确认环境时调用 `laps_connection`；业务操作使用固定的 `laps_orders`、`laps_material_master`、`laps_material_readiness`、`laps_scheduling`、`laps_capacity`、`laps_master_data`、`laps_scheduling_policy` 工具。新增个人与业务能力使用 `laps_personal`、`laps_conversations`、`laps_procurement`、`laps_production_planning`、`laps_warehouse_inventory`、`laps_production_execution`；需要同版本二进制及后端发布后才可使用。参数按对应业务 Skill 命令手册传入；写操作confirm=true，删除/清空/作废额外yes=true。个人同步先sync-preview，展示内容后以同一payload和previewToken做sync-apply，不指定用户归属，不上传网页行为证据。
 
 排产试算不传展示格式或输出位置时，会返回正式 HTML 甘特图资源。连接器不能渲染图时，先让用户确认已 Trust 连接器和已更新版本；必要时输出官方 SVG 文件，不制作替代摘要页面。

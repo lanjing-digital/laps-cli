@@ -38,7 +38,8 @@ export async function runLapsCommand(args, environment = process.env) {
   });
   const data = parseJSON(stdout);
   if (status !== 0 || data?.success === false) {
-    process.stderr.write(`[laps-mcp] LAPS request failed: ${redact(stderr || stdout)}\n`);
+    const personal = ["personal", "conversations"].includes(args[0]);
+    process.stderr.write(`[laps-mcp] LAPS request failed: ${personal ? `personal-context operation failed (exit ${status})` : redact(stderr || stdout)}\n`);
     throw new LapsCommandError("LAPS 业务操作未完成", { stdout, stderr, status });
   }
   return { data: data ?? { output: stdout.trim() }, output: stdout, diagnostics: redact(stderr), status };

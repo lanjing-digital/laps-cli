@@ -23,6 +23,11 @@ export const allSkills = [
   "laps-capacity",
   "laps-master-data",
   "laps-scheduling-policy",
+  "laps-personal-memory",
+  "laps-personal-workbench",
+  "laps-production-planning",
+  "laps-warehouse-inventory",
+  "laps-production-execution",
   "laps-workbuddy-mcp",
 ];
 

@@ -2,7 +2,7 @@
 
 LAPS CLI is the command-line client for the LAPS APS services. It calls the authenticated `/api/laps/*` boundary; scheduling, capacity and readiness rules continue to run on the server.
 
-The package includes eight focused business skills and a separate WorkBuddy connector skill:
+The package includes thirteen focused task skills and a separate WorkBuddy connector skill. Personal memory, production planning, warehouse inventory, production execution, procurement, and conversation commands use the signed-in user's existing APS services.
 
 - `laps-cli-auth`
 - `laps-orders`
@@ -12,9 +12,16 @@ The package includes eight focused business skills and a separate WorkBuddy conn
 - `laps-capacity`
 - `laps-master-data`
 - `laps-scheduling-policy`
+- `laps-personal-memory`
+- `laps-personal-workbench`
+- `laps-production-planning`
+- `laps-warehouse-inventory`
+- `laps-production-execution`
 - `laps-workbuddy-mcp`
 
 ## Install with npx
+
+Personal context and new commands are described in [PERSONAL_CONTEXT.md](docs/PERSONAL_CONTEXT.md). They reuse current user OAuth and PostgreSQL services, not a second CLI memory store.
 
 Install the native CLI, WorkBuddy connector, and all skills for the current platform from the public GitHub repository. Provide the remote APS server address during installation:
 
@@ -91,7 +98,7 @@ Like [larksuite/cli](https://github.com/larksuite/cli/tree/main/internal/update)
 
 ## WorkBuddy CLI + Skill distribution
 
-This is a separate connector option from the MCP configuration above. Generate a directory with `connector-meta.json`, `cli.json`, icon and eight source-derived business skills:
+This is a separate connector option from the MCP configuration above. Generate a directory with `connector-meta.json`, `cli.json`, icon and the current source-derived task skills:
 
 ```sh
 node scripts/build-workbuddy-connector.mjs ./dist/laps-workbuddy-cli

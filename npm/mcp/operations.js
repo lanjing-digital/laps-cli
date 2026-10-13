@@ -14,8 +14,82 @@ const crud = (root, fields = {}) => ({
   delete: operation([root, "delete"], { mutates: true, destructive: true, fields: { id: "id" }, required: ["id"] }),
   ...fields,
 });
+// New service commands carry an explicit CLI confirmation flag in addition to MCP consent.
+const service = (root, action, config = {}) => operation([root, ...action.split(" ")], { confirmFlag: true, ...config });
+const read = (root, action, options = [], id = false) => service(root, action, { options, ...(id ? { fields: { id: "id" }, required: ["id"] } : {}) });
+const write = (root, action, id = false, file = true) => service(root, action, { mutates: true, file, ...(id ? { fields: { id: "id" }, required: ["id"] } : {}) });
 
 export const domainOperations = {
+  personal: {
+    "profile-get": read("personal", "profile get"),
+    "memories-list": read("personal", "memories list", ["category"]),
+    "memories-get": read("personal", "memories get", [], true),
+    "memories-create": write("personal", "memories create"),
+    "memories-update": write("personal", "memories update", true),
+    "memories-delete": { ...write("personal", "memories delete", true, false), destructive: true, options: ["version"] },
+    "memories-clear": { ...write("personal", "memories clear", false, false), destructive: true },
+    "preferences-list": read("personal", "preferences list"),
+    "preferences-create": write("personal", "preferences create"),
+    "preferences-update": write("personal", "preferences update", true),
+    "learning-get": read("personal", "learning get"),
+    "learning-set": { ...write("personal", "learning set", false, false), options: ["enabled"] },
+    "learning-initialize": write("personal", "learning initialize", false, false),
+    "learning-retry": write("personal", "learning retry", false, false),
+    "interests-list": read("personal", "interests list"),
+    "interests-replace": write("personal", "interests replace"),
+    "workbench-get": read("personal", "workbench get"),
+    "workbench-facts": read("personal", "workbench facts", [], true),
+    "workbench-guidance": read("personal", "workbench guidance", [], true),
+    "workbench-refresh": write("personal", "workbench refresh", false, false),
+    "sync-preview": service("personal", "sync preview", { file: true }),
+    "sync-apply": { ...write("personal", "sync apply"), fields: { previewToken: "preview-token" }, required: ["previewToken"] },
+  },
+  conversations: { list: read("conversations", "list"), get: read("conversations", "get", [], true) },
+  procurement: { preview: service("procurement", "preview", { file: true }), apply: write("procurement", "apply") },
+  production_planning: {
+    status: read("planning", "status"),
+    "plans-list": read("planning", "plans list", ["from", "to"]),
+    "plans-get": read("planning", "plans get", [], true),
+    ...Object.fromEntries(["save", "import-readiness"].map(a => [`plans-${a}`, write("planning", `plans ${a}`)])),
+    ...Object.fromEntries(["analyze", "confirm"].map(a => [`plans-${a}`, write("planning", `plans ${a}`, true)])),
+    "followups-list": read("planning", "followups list", ["plan-id"]),
+    "followups-save": write("planning", "followups save"),
+    "preparations-options": read("planning", "preparations options", ["plan-line-id"]),
+    "preparations-apply": write("planning", "preparations apply"),
+  },
+  warehouse_inventory: {
+    "warehouses-list": read("warehouse", "warehouses list"),
+    "warehouses-get": read("warehouse", "warehouses get", [], true),
+    "warehouses-create": write("warehouse", "warehouses create"),
+    ...Object.fromEntries(["update", "assignments", "mode"].map(a => [`warehouses-${a}`, write("warehouse", `warehouses ${a}`, true)])),
+    "users-list": read("warehouse", "users list"),
+    "inventory-list": read("warehouse", "inventory list", ["warehouse-id", "material-code", "batch-no", "stock-status"]),
+    "inventory-adjust": write("warehouse", "inventory adjust"),
+    "inbounds-list": read("warehouse", "inbounds list", ["warehouse-id"]),
+    "documents-list": read("warehouse", "documents list", ["warehouse-id"]),
+    "documents-create": write("warehouse", "documents create"),
+    "documents-post": write("warehouse", "documents post", true, false),
+    "documents-void": { ...write("warehouse", "documents void", true, false), destructive: true },
+    "connectors-save": write("warehouse", "connectors save"),
+    "sync-preview": service("warehouse", "sync preview", { file: true }),
+    "sync-apply": write("warehouse", "sync apply"),
+    "sync-history": read("warehouse", "sync history"),
+  },
+  production_execution: {
+    "progress-list": read("execution", "progress list", ["target-type", "status", "resource-id"]),
+    "reports-list": read("execution", "reports list", ["target-type", "target-id"]),
+    "reports-create": write("execution", "reports create"),
+    "usage-preview": read("execution", "usage preview", ["target-type", "target-id", "output-quantity"]),
+    "settings-get": read("execution", "settings get"),
+    "settings-update": write("execution", "settings update"),
+    "bootstrap-preview": read("execution", "bootstrap preview"),
+    "bootstrap-apply": write("execution", "bootstrap apply"),
+    "replans-list": read("execution", "replans list"),
+    "replans-get": read("execution", "replans get", [], true),
+    "replans-preview": service("execution", "replans preview", { file: true, fields: { id: "id" }, required: ["id"] }),
+    "replans-apply": write("execution", "replans apply", true),
+    "replans-dismiss": write("execution", "replans dismiss", true, false),
+  },
   orders: {
     ...crud("orders"),
     export: operation(["orders", "export"], { output: true, outputRequired: true, options: ["format"] }),
@@ -133,6 +207,8 @@ export async function prepareInvocation(domain, input) {
   const requestedFormat = input.format ?? input.options?.format;
   const useDefaultHtmlPreview = spec.htmlPreview && (requestedFormat === undefined || requestedFormat === "html") && !input.outputPath;
   const args = [...spec.tokens];
+  if (spec.confirmFlag && spec.mutates) args.push("--confirm");
+  if (spec.confirmFlag && spec.destructive) args.push("--yes");
   for (const [field, optionName] of Object.entries(spec.fields)) {
     const value = input[field];
     if (value !== undefined && value !== "") args.push(...valueArgs(optionName, value));

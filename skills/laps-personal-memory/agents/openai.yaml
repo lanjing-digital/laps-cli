@@ -1,0 +1,4 @@
+interface:
+  display_name: "个人记忆与跨智能体习惯同步"
+  short_description: "复用当前用户登录与正式业务能力，查询核对后确认保存并说明实际处理结果"
+  default_prompt: "Use $laps-personal-memory to handle this task with the current user's permissions and confirm changes before saving."
